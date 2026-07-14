@@ -25,9 +25,13 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Test and build
+      - name: Verify IntelliJ model
         run: |
           chmod +x gradlew
+          ./gradlew ideaModule --stacktrace
+
+      - name: Test and build
+        run: |
           ./gradlew test runGameTestServer build --stacktrace
 
       - name: Upload universal JAR
