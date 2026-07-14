@@ -14,6 +14,7 @@ import net.neoforged.fml.config.ModConfig;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import org.slf4j.Logger;
 
 @Mod(LostCitiesRoadFixes.MOD_ID)
@@ -28,6 +29,7 @@ public final class LostCitiesRoadFixes {
         modBus.addListener(RoadFixesServerConfig::onReloading);
         NeoForge.EVENT_BUS.addListener(LostCitiesRoadFixes::addReloadListeners);
         NeoForge.EVENT_BUS.addListener(RoadFixesCommands::registerEvent);
+        NeoForge.EVENT_BUS.addListener(LostCitiesRoadFixes::logStoppingDiagnostics);
         LOGGER.info("Loading {} {}", container.getModInfo().getDisplayName(), container.getModInfo().getVersion());
     }
 
@@ -36,5 +38,10 @@ public final class LostCitiesRoadFixes {
         event.addListener(new InterchangeDesignReloadListener(
                 InterchangeDesignResources.repository(),
                 RoadGenerationRuntime::invalidatePlans));
+    }
+
+    private static void logStoppingDiagnostics(ServerStoppingEvent event) {
+        LOGGER.info("Road generation shutdown snapshot: {}",
+                RoadGenerationRuntime.diagnostics().compactLine());
     }
 }
