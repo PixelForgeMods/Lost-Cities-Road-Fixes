@@ -11,6 +11,7 @@ public record RampCenterline(
         double lengthBlocks,
         HalfBlockElevation startElevation,
         HalfBlockElevation endElevation,
+        List<RampElevationKeyframe> elevationProfile,
         List<RampCenterlineSample> samples) {
     public RampCenterline {
         Objects.requireNonNull(startPose, "startPose");
@@ -19,6 +20,24 @@ public record RampCenterline(
         Objects.requireNonNull(endElevation, "endElevation");
         if (!Double.isFinite(lengthBlocks) || lengthBlocks <= 0.0) {
             throw new IllegalArgumentException("Centerline length must be finite and positive");
+        }
+        elevationProfile = List.copyOf(elevationProfile);
+        if (elevationProfile.size() < 2
+                || elevationProfile.getFirst().stationBlocks() != 0.0
+                || elevationProfile.getLast().stationBlocks() != lengthBlocks) {
+            throw new IllegalArgumentException(
+                    "Elevation profile must include exact centerline endpoints");
+        }
+        double previousKeyframe = -1.0;
+        for (RampElevationKeyframe keyframe : elevationProfile) {
+            if (keyframe.stationBlocks() <= previousKeyframe) {
+                throw new IllegalArgumentException("Elevation keyframe stations must increase");
+            }
+            previousKeyframe = keyframe.stationBlocks();
+        }
+        if (!elevationProfile.getFirst().elevation().equals(startElevation)
+                || !elevationProfile.getLast().elevation().equals(endElevation)) {
+            throw new IllegalArgumentException("Elevation profile endpoints do not match centerline endpoints");
         }
         samples = List.copyOf(samples);
         if (samples.size() < 2) {
@@ -44,16 +63,32 @@ public record RampCenterline(
             throw new IllegalArgumentException(
                     "Station must be between 0 and " + lengthBlocks + ": " + stationBlocks);
         }
-        if (stationBlocks == lengthBlocks) {
-            return endElevation;
-        }
+        return elevationAt(elevationProfile, stationBlocks, lengthBlocks);
+    }
 
-        long delta = (long) endElevation.halfBlocks() - startElevation.halfBlocks();
-        long magnitude = Math.abs(delta);
-        long progress = (long) StrictMath.floor(stationBlocks * magnitude / lengthBlocks + 1.0e-12);
-        long elevation = delta >= 0
-                ? (long) startElevation.halfBlocks() + progress
-                : (long) startElevation.halfBlocks() - progress;
-        return new HalfBlockElevation(Math.toIntExact(elevation));
+    static HalfBlockElevation elevationAt(
+            List<RampElevationKeyframe> profile,
+            double stationBlocks,
+            double lengthBlocks) {
+        if (stationBlocks == lengthBlocks) {
+            return profile.getLast().elevation();
+        }
+        for (int index = 0; index < profile.size() - 1; index++) {
+            RampElevationKeyframe start = profile.get(index);
+            RampElevationKeyframe end = profile.get(index + 1);
+            if (stationBlocks <= end.stationBlocks()) {
+                double localStation = stationBlocks - start.stationBlocks();
+                double localLength = end.stationBlocks() - start.stationBlocks();
+                long delta = (long) end.elevation().halfBlocks()
+                        - start.elevation().halfBlocks();
+                long progress = (long) StrictMath.floor(
+                        localStation * Math.abs(delta) / localLength + 1.0e-12);
+                long elevation = delta >= 0
+                        ? (long) start.elevation().halfBlocks() + progress
+                        : (long) start.elevation().halfBlocks() - progress;
+                return new HalfBlockElevation(Math.toIntExact(elevation));
+            }
+        }
+        throw new IllegalStateException("No elevation profile leg contains station " + stationBlocks);
     }
 }

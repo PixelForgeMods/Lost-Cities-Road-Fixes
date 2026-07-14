@@ -9,17 +9,35 @@ import java.util.Objects;
 public record InterchangeGeometrySite(
         PlanarPoint center,
         int approachRunBlocks,
-        HalfBlockElevation xRoadElevation,
-        HalfBlockElevation zRoadElevation) {
+        HalfBlockElevation xRoadNativeElevation,
+        HalfBlockElevation zRoadNativeElevation,
+        HalfBlockElevation xRoadCenterElevation,
+        HalfBlockElevation zRoadCenterElevation) {
     private static final double LANE_OFFSET = 8.0;
 
     public InterchangeGeometrySite {
         Objects.requireNonNull(center, "center");
-        Objects.requireNonNull(xRoadElevation, "xRoadElevation");
-        Objects.requireNonNull(zRoadElevation, "zRoadElevation");
+        Objects.requireNonNull(xRoadNativeElevation, "xRoadNativeElevation");
+        Objects.requireNonNull(zRoadNativeElevation, "zRoadNativeElevation");
+        Objects.requireNonNull(xRoadCenterElevation, "xRoadCenterElevation");
+        Objects.requireNonNull(zRoadCenterElevation, "zRoadCenterElevation");
         if (approachRunBlocks < 1) {
             throw new IllegalArgumentException("Interchange approach run must be positive");
         }
+    }
+
+    public InterchangeGeometrySite(
+            PlanarPoint center,
+            int approachRunBlocks,
+            HalfBlockElevation xRoadElevation,
+            HalfBlockElevation zRoadElevation) {
+        this(
+                center,
+                approachRunBlocks,
+                xRoadElevation,
+                zRoadElevation,
+                xRoadElevation,
+                zRoadElevation);
     }
 
     public InterchangePort port(ApproachDirection direction, TrafficFlow flow) {
@@ -56,8 +74,8 @@ public record InterchangeGeometrySite(
             default -> throw new IllegalStateException("Unhandled approach " + direction);
         }
         HalfBlockElevation elevation = switch (direction) {
-            case EAST, WEST -> xRoadElevation;
-            case NORTH, SOUTH -> zRoadElevation;
+            case EAST, WEST -> xRoadNativeElevation;
+            case NORTH, SOUTH -> zRoadNativeElevation;
         };
         return new InterchangePort(
                 direction,
@@ -65,5 +83,12 @@ public record InterchangeGeometrySite(
                 new PlanarPoint(center.x() + localPoint.x(), center.z() + localPoint.z()),
                 elevation,
                 heading);
+    }
+
+    public HalfBlockElevation centerElevation(ApproachDirection direction) {
+        return switch (Objects.requireNonNull(direction, "direction")) {
+            case EAST, WEST -> xRoadCenterElevation;
+            case NORTH, SOUTH -> zRoadCenterElevation;
+        };
     }
 }

@@ -8,7 +8,7 @@ An interchange name alone is not renderable or testable. The planner must know w
 
 ## Decision
 
-Every built-in layout contains one connection for each legal directed movement. Three-way designs use west, east, and south approaches and contain six movements. Four-way designs contain twelve. Mainline movements are explicit level routes; each of the remaining movements is a direct or loop ramp.
+Every built-in layout contains one connection for each legal directed movement. Three-way designs use west, east, and south as their canonical orientation, rotate to the three surveyed approaches, and contain six movements. Four-way designs contain twelve. Mainline movements are explicit routes; each of the remaining movements is a direct or loop ramp.
 
 Ports use right-hand traffic and an eight-block offset from the 32-block arterial centerline. Their positions sit at the site's approach envelope, and their elevation is inherited from the X or Z highway deck. The layout factory verifies every generated turn ends at its expected port.
 

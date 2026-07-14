@@ -46,37 +46,66 @@ public final class RampPathBuilder {
         return turn(radiusBlocks, degrees, 1);
     }
 
+    public double lengthBlocks() {
+        return lengthBlocks;
+    }
+
     public RampCenterline build(
             HalfBlockElevation startElevation,
             HalfBlockElevation endElevation) {
         Objects.requireNonNull(startElevation, "startElevation");
         Objects.requireNonNull(endElevation, "endElevation");
+        return build(List.of(
+                new RampElevationKeyframe(0.0, startElevation),
+                new RampElevationKeyframe(lengthBlocks, endElevation)));
+    }
+
+    public RampCenterline build(List<RampElevationKeyframe> elevationProfile) {
         if (segments.isEmpty()) {
             throw new IllegalStateException("A ramp path needs at least one segment");
         }
-
-        int minimumRun = gradePlanner.minimumRunBlocks(startElevation, endElevation);
-        if (lengthBlocks + EPSILON < minimumRun) {
+        List<RampElevationKeyframe> profile = List.copyOf(elevationProfile);
+        if (profile.size() < 2
+                || profile.getFirst().stationBlocks() != 0.0
+                || profile.getLast().stationBlocks() != lengthBlocks) {
             throw new IllegalArgumentException(
-                    "Elevation transition requires " + minimumRun
-                            + " blocks but the ramp path has only " + formatted(lengthBlocks));
+                    "Elevation profile must start at 0 and end at " + formatted(lengthBlocks));
+        }
+        double previousStation = -1.0;
+        for (RampElevationKeyframe keyframe : profile) {
+            if (keyframe.stationBlocks() <= previousStation) {
+                throw new IllegalArgumentException("Elevation keyframe stations must increase");
+            }
+            previousStation = keyframe.stationBlocks();
+        }
+        for (int index = 0; index < profile.size() - 1; index++) {
+            RampElevationKeyframe start = profile.get(index);
+            RampElevationKeyframe end = profile.get(index + 1);
+            double availableRun = end.stationBlocks() - start.stationBlocks();
+            int minimumRun = gradePlanner.minimumRunBlocks(start.elevation(), end.elevation());
+            if (availableRun + EPSILON < minimumRun) {
+                throw new IllegalArgumentException(
+                        "Elevation profile leg requires " + minimumRun
+                                + " blocks but has only " + formatted(availableRun));
+            }
         }
 
         List<RampCenterlineSample> samples = new ArrayList<>();
         int wholeStations = (int) StrictMath.floor(lengthBlocks);
         for (int station = 0; station <= wholeStations; station++) {
-            addSample(samples, station, startElevation, endElevation);
+            addSample(samples, station, profile);
         }
         if (lengthBlocks - wholeStations > EPSILON) {
-            addSample(samples, lengthBlocks, startElevation, endElevation);
+            addSample(samples, lengthBlocks, profile);
         }
 
         return new RampCenterline(
                 startPose,
                 currentPose,
                 lengthBlocks,
-                startElevation,
-                endElevation,
+                profile.getFirst().elevation(),
+                profile.getLast().elevation(),
+                profile,
                 samples);
     }
 
@@ -105,11 +134,10 @@ public final class RampPathBuilder {
     private void addSample(
             List<RampCenterlineSample> samples,
             double station,
-            HalfBlockElevation startElevation,
-            HalfBlockElevation endElevation) {
+            List<RampElevationKeyframe> elevationProfile) {
         SegmentLocation location = locate(station);
-        HalfBlockElevation elevation = elevationAt(
-                station, startElevation, endElevation, lengthBlocks);
+        HalfBlockElevation elevation = RampCenterline.elevationAt(
+                elevationProfile, station, lengthBlocks);
         samples.add(new RampCenterlineSample(
                 station,
                 location.segment().pointAt(location.localStation()),
@@ -130,23 +158,6 @@ public final class RampPathBuilder {
             segmentStart = segmentEnd;
         }
         throw new IllegalStateException("Could not locate station " + station);
-    }
-
-    private static HalfBlockElevation elevationAt(
-            double station,
-            HalfBlockElevation start,
-            HalfBlockElevation end,
-            double length) {
-        if (station >= length - EPSILON) {
-            return end;
-        }
-        long delta = (long) end.halfBlocks() - start.halfBlocks();
-        long progress = (long) StrictMath.floor(
-                station * Math.abs(delta) / length + 1.0e-12);
-        long halfBlocks = delta >= 0
-                ? (long) start.halfBlocks() + progress
-                : (long) start.halfBlocks() - progress;
-        return new HalfBlockElevation(Math.toIntExact(halfBlocks));
     }
 
     private static void requirePositiveFinite(double value, String name) {
