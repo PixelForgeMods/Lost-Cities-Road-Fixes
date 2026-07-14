@@ -19,9 +19,18 @@ public final class InterchangeDesignReloadListener
     public static final String DIRECTORY = "lostcities_road_fixes/interchanges";
 
     private final InterchangeDesignRepository repository;
+    private final InterchangeDesignInstaller installer;
 
     public InterchangeDesignReloadListener(InterchangeDesignRepository repository) {
+        this(repository, () -> {
+        });
+    }
+
+    public InterchangeDesignReloadListener(
+            InterchangeDesignRepository repository,
+            Runnable plansInvalidator) {
         this.repository = repository;
+        this.installer = new InterchangeDesignInstaller(repository, plansInvalidator);
     }
 
     @Override
@@ -55,7 +64,7 @@ public final class InterchangeDesignReloadListener
             Map<InterchangeDesignId, InterchangeDesign> designs,
             ResourceManager resourceManager,
             ProfilerFiller profiler) {
-        repository.replaceCustom(designs);
+        installer.install(designs);
         LostCitiesRoadFixes.LOGGER.info(
                 "Loaded {} custom interchange design(s); {} total design(s) available",
                 designs.size(),

@@ -2,6 +2,7 @@ package net.austizz.lostcitiesroadfixes.interchange.render;
 
 import net.austizz.lostcitiesroadfixes.planning.continuity.RoadAxis;
 import net.austizz.lostcitiesroadfixes.render.ElevatedRoadTile;
+import net.austizz.lostcitiesroadfixes.render.RoadSurfacePosition;
 import net.austizz.lostcitiesroadfixes.road.HalfBlockElevation;
 
 import java.util.Objects;
@@ -83,5 +84,17 @@ public record GradedArterial(
             }
         }
         return false;
+    }
+
+    public boolean replacesNativeCell(RoadSurfacePosition position) {
+        Objects.requireNonNull(position, "position");
+        if (!position.elevation().equals(nativeElevation)) {
+            return false;
+        }
+        int longitudinal = axis == RoadAxis.X ? position.x() : position.z();
+        int cross = axis == RoadAxis.X ? position.z() : position.x();
+        return containsLongitudinal(longitudinal)
+                && cross >= centerCrossBlock() - 16
+                && cross <= centerCrossBlock() + 15;
     }
 }

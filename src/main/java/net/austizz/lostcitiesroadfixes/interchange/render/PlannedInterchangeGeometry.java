@@ -5,6 +5,8 @@ import net.austizz.lostcitiesroadfixes.interchange.layout.InterchangeLayout;
 import net.austizz.lostcitiesroadfixes.interchange.layout.RampForm;
 import net.austizz.lostcitiesroadfixes.interchange.planning.PlannedInterchange;
 import net.austizz.lostcitiesroadfixes.render.ElevatedRoadTile;
+import net.austizz.lostcitiesroadfixes.render.RoadSurfacePosition;
+import net.austizz.lostcitiesroadfixes.road.ChunkPoint;
 
 import java.util.List;
 import java.util.Objects;
@@ -31,5 +33,18 @@ public record PlannedInterchangeGeometry(
 
     public boolean replaces(ElevatedRoadTile road) {
         return arterials.stream().anyMatch(arterial -> arterial.replaces(road));
+    }
+
+    public boolean replacesNativeCell(RoadSurfacePosition position) {
+        return arterials.stream().anyMatch(arterial -> arterial.replacesNativeCell(position));
+    }
+
+    public boolean mayAffect(ChunkPoint target) {
+        Objects.requireNonNull(target, "target");
+        ChunkPoint center = plan.crossing().chunk();
+        int chunkRadius = Math.floorDiv(
+                Math.addExact(plan.crossing().approachRunBlocks(), 15), 16);
+        return StrictMath.abs((long) target.x() - center.x()) <= chunkRadius
+                && StrictMath.abs((long) target.z() - center.z()) <= chunkRadius;
     }
 }

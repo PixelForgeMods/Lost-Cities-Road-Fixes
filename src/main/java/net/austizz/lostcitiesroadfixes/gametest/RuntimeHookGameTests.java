@@ -3,6 +3,7 @@ package net.austizz.lostcitiesroadfixes.gametest;
 import mcjty.lostcities.worldgen.gen.Highways;
 import net.austizz.lostcitiesroadfixes.LostCitiesRoadFixes;
 import net.austizz.lostcitiesroadfixes.integration.RoadGenerationRuntime;
+import net.austizz.lostcitiesroadfixes.integration.RuntimeRoadRenderPipeline;
 import net.austizz.lostcitiesroadfixes.render.ChunkRoadSurface;
 import net.austizz.lostcitiesroadfixes.render.MinecraftRoadWriter;
 import net.austizz.lostcitiesroadfixes.render.RoadSurfaceCell;
@@ -20,6 +21,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @GameTestHolder(LostCitiesRoadFixes.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -45,6 +47,23 @@ public final class RuntimeHookGameTests {
             throws ClassNotFoundException {
         Class.forName("mcjty.lostcities.worldgen.LostCityTerrainFeature", true,
                 RuntimeHookGameTests.class.getClassLoader());
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty3x3x3", timeoutTicks = 20)
+    public static void runtimePipelineWritesOneComposedSurface(GameTestHelper helper) {
+        AtomicInteger writes = new AtomicInteger();
+
+        new RuntimeRoadRenderPipeline().render(
+                new ChunkPoint(0, 0),
+                List.of(),
+                List.of(),
+                surface -> writes.incrementAndGet());
+
+        if (writes.get() != 1) {
+            helper.fail("Runtime road pipeline wrote " + writes.get() + " surfaces instead of one");
+            return;
+        }
         helper.succeed();
     }
 
