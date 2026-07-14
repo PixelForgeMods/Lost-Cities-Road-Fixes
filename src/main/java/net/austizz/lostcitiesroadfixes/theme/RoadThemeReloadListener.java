@@ -50,7 +50,7 @@ public final class RoadThemeReloadListener
             ProfilerFiller profiler) {
         RoadThemeResources.install(themes);
         LostCitiesRoadFixes.LOGGER.info(
-                "Loaded {} custom road theme(s); active theme is {}",
+                "Loaded {} custom road theme(s); default theme is {}",
                 themes.size(),
                 RoadThemeResources.active().id());
     }

@@ -2,6 +2,8 @@ package net.austizz.lostcitiesroadfixes.gametest;
 
 import mcjty.lostcities.worldgen.gen.Highways;
 import net.austizz.lostcitiesroadfixes.LostCitiesRoadFixes;
+import net.austizz.lostcitiesroadfixes.config.RoadFixesServerConfig;
+import net.austizz.lostcitiesroadfixes.config.RoadOperationalSettings;
 import net.austizz.lostcitiesroadfixes.integration.RoadGenerationRuntime;
 import net.austizz.lostcitiesroadfixes.integration.RuntimeRoadRenderPipeline;
 import net.austizz.lostcitiesroadfixes.render.ChunkRoadSurface;
@@ -211,6 +213,53 @@ public final class RuntimeHookGameTests {
                 helper.fail("Invalid theme reload replaced the active compiled snapshot");
                 return;
             }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty3x3x3", timeoutTicks = 20)
+    public static void operatorConfigAndCommandsAreLiveOnTheServer(GameTestHelper helper)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        RoadOperationalSettings settings = RoadFixesServerConfig.settings();
+        if (settings.maximumGapChunks() < RoadOperationalSettings.MINIMUM_GAP_CHUNKS
+                || settings.maximumGapChunks() > RoadOperationalSettings.MAXIMUM_GAP_CHUNKS
+                || settings.maximumCachedRegions()
+                        < RoadOperationalSettings.MINIMUM_CACHED_REGIONS
+                || settings.maximumCachedRegions()
+                        > RoadOperationalSettings.MAXIMUM_CACHED_REGIONS) {
+            helper.fail("Loaded road-fix server config escaped its safety bounds");
+            return;
+        }
+        if (!RoadThemeResources.active(RoadThemeId.parse("missing:not_loaded"))
+                .id().equals(RoadThemeCatalogue.DEFAULT_ID)) {
+            helper.fail("Unavailable configured themes must resolve to the built-in default");
+            return;
+        }
+
+        var server = helper.getLevel().getServer();
+        var dispatcher = server.getCommands().getDispatcher();
+        var root = dispatcher.getRoot().getChild(LostCitiesRoadFixes.MOD_ID);
+        if (root == null
+                || root.getChild("status") == null
+                || root.getChild("clear_caches") == null
+                || dispatcher.getRoot().getChild("lcroadfixes") == null) {
+            helper.fail("Road-fix operator commands were not registered");
+            return;
+        }
+        int statusLines = dispatcher.execute(
+                LostCitiesRoadFixes.MOD_ID + " status",
+                server.createCommandSourceStack());
+        if (statusLines != 8) {
+            helper.fail("Status command returned " + statusLines + " lines instead of 8");
+            return;
+        }
+        dispatcher.execute(
+                LostCitiesRoadFixes.MOD_ID + " clear_caches",
+                server.createCommandSourceStack());
+        if (RoadGenerationRuntime.roadPlanCacheSize() != 0
+                || RoadGenerationRuntime.interchangePlanCacheSize() != 0) {
+            helper.fail("Cache clear command did not replace both cache generations");
+            return;
         }
         helper.succeed();
     }

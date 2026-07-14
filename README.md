@@ -22,6 +22,7 @@ complete movement geometry, controls, widths, and structural tiers—with server
 datapacks. See [the custom-interchange format](docs/datapacks/interchanges.md).
 Road materials and support blocks can also be replaced with
 [datapack road themes](docs/datapacks/road-themes.md).
+Server operators can use the bounded [server configuration and diagnostics](docs/configuration.md).
 
 ## Development
 
