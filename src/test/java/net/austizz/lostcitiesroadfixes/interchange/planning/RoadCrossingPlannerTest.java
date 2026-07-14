@@ -144,10 +144,60 @@ class RoadCrossingPlannerTest {
         assertFalse(first.interchanges().isEmpty());
     }
 
+    @Test
+    void denseEightChunkCrossingsProduceOneSafeCoreAndOneConflict() {
+        ChunkPoint firstCrossing = new ChunkPoint(0, 0);
+        ChunkPoint secondCrossing = new ChunkPoint(8, 0);
+        Map<RoadTileKey, RoadTile> roads = crossing(firstCrossing, 16, 0, 1, false);
+        roads.putAll(crossing(secondCrossing, 16, 0, 1, false));
+
+        RegionalInterchangePlan plan = planner(256).plan(
+                keyFor(firstCrossing),
+                new ChunkBounds(0, 8, 0, 0),
+                lookup(roads),
+                ELEVATIONS);
+
+        assertEquals(1, plan.interchanges().size());
+        assertEquals(1, plan.conflictedCrossings().size());
+        assertTrue(plan.rejectedCrossings().isEmpty());
+        assertEquals(
+                plan.interchanges().getFirst().crossing().chunk(),
+                plan.conflictedCrossings().getFirst().blockingCrossing());
+    }
+
+    @Test
+    void denseConflictOwnershipAgreesAcrossPositiveAndNegativeRegionBoundaries() {
+        assertBoundaryConflict(new ChunkPoint(63, 0), new ChunkPoint(64, 0));
+        assertBoundaryConflict(new ChunkPoint(-65, 0), new ChunkPoint(-64, 0));
+    }
+
     private static InterchangeRegionalPlanner planner(int maximumApproachBlocks) {
         return new InterchangeRegionalPlanner(
                 new RoadCrossingSurveyor(maximumApproachBlocks, STANDARD),
-                InterchangeSelector.withBuiltIns());
+                InterchangeSelector.withBuiltIns(),
+                new InterchangeConflictResolver(STANDARD));
+    }
+
+    private static void assertBoundaryConflict(ChunkPoint first, ChunkPoint second) {
+        Map<RoadTileKey, RoadTile> roads = crossing(first, 16, 0, 1, false);
+        roads.putAll(crossing(second, 16, 0, 1, false));
+
+        RegionalInterchangePlan firstOwner = planner(256).plan(
+                keyFor(first),
+                new ChunkBounds(first.x(), first.x(), first.z(), first.z()),
+                lookup(roads),
+                ELEVATIONS);
+        RegionalInterchangePlan secondOwner = planner(256).plan(
+                keyFor(second),
+                new ChunkBounds(second.x(), second.x(), second.z(), second.z()),
+                lookup(roads),
+                ELEVATIONS);
+
+        assertEquals(1,
+                firstOwner.interchanges().size() + secondOwner.interchanges().size());
+        assertEquals(1,
+                firstOwner.conflictedCrossings().size()
+                        + secondOwner.conflictedCrossings().size());
     }
 
     private static RoadPlanKey keyFor(ChunkPoint chunk) {

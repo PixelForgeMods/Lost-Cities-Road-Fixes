@@ -15,7 +15,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 public final class RoadCrossingSurveyor {
-    private static final int MAXIMUM_RADIUS_BLOCKS = 128;
+    public static final int MAXIMUM_RADIUS_BLOCKS = 128;
 
     private final int maximumApproachBlocks;
     private final int maximumArmChunks;

@@ -112,6 +112,7 @@ class RuntimeInterchangeIntegrationTest {
         RegionalInterchangeGeometryPlan plan = new RegionalInterchangeGeometryPlan(
                 new RoadPlanKey(1L, "minecraft:overworld", new PlanningRegion(0, 0), "test"),
                 List.of(geometry),
+                0,
                 0);
 
         assertEquals(List.of(geometry), plan.affecting(new ChunkPoint(16, 0)));

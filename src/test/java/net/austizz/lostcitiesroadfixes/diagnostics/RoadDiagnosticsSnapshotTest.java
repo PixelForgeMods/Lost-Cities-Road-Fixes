@@ -23,6 +23,7 @@ class RoadDiagnosticsSnapshotTest {
                 10,
                 11,
                 12,
+                13,
                 "example:requested",
                 "lostcitiesroadfixes:default",
                 4,
@@ -34,8 +35,9 @@ class RoadDiagnosticsSnapshotTest {
         assertEquals("Lost Cities: Road Fixes diagnostics", lines.getFirst());
         assertTrue(lines.stream().anyMatch(line -> line.contains("compatible=true")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("selected=6")));
-        assertTrue(lines.stream().anyMatch(line -> line.contains("roads=9")));
-        assertTrue(lines.stream().anyMatch(line -> line.contains("loadedDesigns=11")));
+        assertTrue(lines.stream().anyMatch(line -> line.contains("conflicted=8")));
+        assertTrue(lines.stream().anyMatch(line -> line.contains("roads=10")));
+        assertTrue(lines.stream().anyMatch(line -> line.contains("loadedDesigns=12")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("example:requested")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("fallback=true")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("maximumGapChunks=4")));
@@ -45,10 +47,10 @@ class RoadDiagnosticsSnapshotTest {
     @Test
     void rejectsNegativeCountersAndBlankThemeIds() {
         assertThrows(IllegalArgumentException.class, () -> new RoadDiagnosticsSnapshot(
-                true, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                true, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 "a:b", "a:b", 1, 64, true));
         assertThrows(IllegalArgumentException.class, () -> new RoadDiagnosticsSnapshot(
-                true, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                true, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 " ", "a:b", 1, 64, true));
     }
 }

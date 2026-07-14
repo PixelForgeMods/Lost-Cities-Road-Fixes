@@ -10,6 +10,7 @@ public record RoadDiagnosticsSnapshot(
         long interchangeRegionsPlanned,
         long selectedInterchanges,
         long rejectedCrossings,
+        long conflictedCrossings,
         long interchangeRenderInvocations,
         int roadCacheSize,
         int interchangeCacheSize,
@@ -26,6 +27,7 @@ public record RoadDiagnosticsSnapshot(
         requireNonNegative(interchangeRegionsPlanned, "interchangeRegionsPlanned");
         requireNonNegative(selectedInterchanges, "selectedInterchanges");
         requireNonNegative(rejectedCrossings, "rejectedCrossings");
+        requireNonNegative(conflictedCrossings, "conflictedCrossings");
         requireNonNegative(interchangeRenderInvocations, "interchangeRenderInvocations");
         requireNonNegative(roadCacheSize, "roadCacheSize");
         requireNonNegative(interchangeCacheSize, "interchangeCacheSize");
@@ -48,6 +50,7 @@ public record RoadDiagnosticsSnapshot(
                 "interchanges: regions=" + interchangeRegionsPlanned
                         + ", selected=" + selectedInterchanges
                         + ", rejected=" + rejectedCrossings
+                        + ", conflicted=" + conflictedCrossings
                         + ", renderedChunks=" + interchangeRenderInvocations,
                 "caches: roads=" + roadCacheSize
                         + ", interchanges=" + interchangeCacheSize,
