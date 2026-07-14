@@ -1,5 +1,7 @@
 package net.austizz.lostcitiesroadfixes.regression;
 
+import net.austizz.lostcitiesroadfixes.road.BlockPoint;
+import net.austizz.lostcitiesroadfixes.road.ChunkPoint;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -13,8 +15,8 @@ class ReportedGapRegressionTest {
 
         assertEquals(-6_377_442_428_365_110_436L, incident.seed());
         assertEquals("minecraft:overworld", incident.dimension());
-        assertEquals(new ChunkCoordinate(-64, -140), incident.explosionSourceChunk());
-        assertEquals(new ChunkCoordinate(-64, -139), incident.gapChunk());
+        assertEquals(new ChunkPoint(-64, -140), incident.explosionSourceChunk());
+        assertEquals(new ChunkPoint(-64, -139), incident.gapChunk());
         assertEquals(0, incident.cityLevel());
 
         MiniExplosionSample sample = LostCitiesDamageOracle.sampleMiniExplosion(
@@ -26,7 +28,7 @@ class ReportedGapRegressionTest {
 
         assertEquals(0.029846012592f, sample.chanceRoll());
         assertEquals(7, sample.radius());
-        assertEquals(new BlockCoordinate(-1023, 70, -2225), sample.center());
+        assertEquals(new BlockPoint(-1023, 70, -2225), sample.center());
         assertTrue(sample.intersects(incident.gapChunk()));
     }
 

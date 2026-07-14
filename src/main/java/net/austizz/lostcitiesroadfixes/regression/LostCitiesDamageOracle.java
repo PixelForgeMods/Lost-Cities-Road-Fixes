@@ -1,5 +1,8 @@
 package net.austizz.lostcitiesroadfixes.regression;
 
+import net.austizz.lostcitiesroadfixes.road.BlockPoint;
+import net.austizz.lostcitiesroadfixes.road.ChunkPoint;
+
 import java.util.Optional;
 import java.util.Random;
 
@@ -12,7 +15,7 @@ public final class LostCitiesDamageOracle {
 
     public static Optional<MiniExplosionSample> sampleMiniExplosion(
             long worldSeed,
-            ChunkCoordinate sourceChunk,
+            ChunkPoint sourceChunk,
             int cityLevel,
             MiniExplosionSettings settings) {
         Random random = new Random(worldSeed
@@ -29,6 +32,6 @@ public final class LostCitiesDamageOracle {
         int y = cityLevel * 6 + settings.minimumHeight()
                 + random.nextInt(settings.maximumHeightExclusive() - settings.minimumHeight());
         int z = sourceChunk.minBlockZ() + random.nextInt(16);
-        return Optional.of(new MiniExplosionSample(chanceRoll, radius, new BlockCoordinate(x, y, z)));
+        return Optional.of(new MiniExplosionSample(chanceRoll, radius, new BlockPoint(x, y, z)));
     }
 }
