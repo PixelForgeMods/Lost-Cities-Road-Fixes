@@ -4,7 +4,10 @@
   "package": "net.austizz.lostcitiesroadfixes.mixin",
   "plugin": "net.austizz.lostcitiesroadfixes.compat.LostCitiesMixinPlugin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": [],
+  "mixins": [
+    "HighwaysMixin",
+    "LostCityTerrainFeatureMixin"
+  ],
   "client": [],
   "server": [],
   "injectors": {
