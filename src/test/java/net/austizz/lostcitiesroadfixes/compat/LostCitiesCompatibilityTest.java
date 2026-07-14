@@ -22,6 +22,8 @@ class LostCitiesCompatibilityTest {
                 "mcjty.lostcities.worldgen.lost.Highway#getXHighwayLevel"));
         assertTrue(report.verifiedSymbols().contains(
                 "mcjty.lostcities.worldgen.LostCityTerrainFeature#fixAfterExplosion"));
+        assertTrue(report.verifiedSymbols().contains(
+                "mcjty.lostcities.worldgen.LostCityTerrainFeature#generate"));
     }
 
     @Test
@@ -32,6 +34,8 @@ class LostCitiesCompatibilityTest {
         assertTrue(mixinConfig.contains("\"required\": true"));
         assertTrue(mixinConfig.contains(
                 "\"plugin\": \"net.austizz.lostcitiesroadfixes.compat.LostCitiesMixinPlugin\""));
+        assertTrue(mixinConfig.contains("\"HighwaysMixin\""));
+        assertTrue(mixinConfig.contains("\"LostCityTerrainFeatureMixin\""));
         assertTrue(modMetadata.contains("config=\"lostcitiesroadfixes.mixins.json\""));
     }
 

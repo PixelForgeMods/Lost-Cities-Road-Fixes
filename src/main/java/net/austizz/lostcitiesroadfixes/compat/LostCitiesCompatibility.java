@@ -42,6 +42,9 @@ public final class LostCitiesCompatibility {
                     + "Lmcjty/lostcities/config/LostCityProfile;)Z";
     private static final String FIX_AFTER_EXPLOSION_DESCRIPTOR =
             "(Lmcjty/lostcities/worldgen/lost/BuildingInfo;)V";
+    private static final String GENERATE_TERRAIN_DESCRIPTOR =
+            "(Lnet/minecraft/server/level/WorldGenRegion;"
+                    + "Lnet/minecraft/world/level/chunk/ChunkAccess;)V";
 
     private LostCitiesCompatibility() {
     }
@@ -70,6 +73,8 @@ public final class LostCitiesCompatibility {
             verifyMethod(jarPath, verified, BUILDING_INFO, "hasHighway", HAS_HIGHWAY_DESCRIPTOR, true);
             verifyMethod(jarPath, verified, TERRAIN_FEATURE, "fixAfterExplosion",
                     FIX_AFTER_EXPLOSION_DESCRIPTOR, false);
+            verifyMethod(jarPath, verified, TERRAIN_FEATURE, "generate",
+                    GENERATE_TERRAIN_DESCRIPTOR, false);
         } catch (IOException | URISyntaxException | NoSuchAlgorithmException exception) {
             errors.add(exception.getClass().getSimpleName() + ": " + exception.getMessage());
         }
