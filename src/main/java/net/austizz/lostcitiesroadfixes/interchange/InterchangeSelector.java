@@ -5,7 +5,7 @@ import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -21,16 +21,16 @@ public final class InterchangeSelector {
         this.standard = Objects.requireNonNull(standard, "standard");
         this.gradePlanner = new GradeProfilePlanner(standard);
 
-        Map<InterchangeType, InterchangeDesign> byType = new EnumMap<>(InterchangeType.class);
+        Map<InterchangeDesignId, InterchangeDesign> byId = new HashMap<>();
         for (InterchangeDesign design : designs) {
-            InterchangeDesign previous = byType.put(design.type(), design);
+            InterchangeDesign previous = byId.put(design.id(), design);
             if (previous != null) {
-                throw new IllegalArgumentException("Duplicate interchange design " + design.type());
+                throw new IllegalArgumentException("Duplicate interchange design " + design.id());
             }
         }
-        this.designs = List.of(InterchangeType.values()).stream()
-                .map(byType::get)
-                .filter(Objects::nonNull)
+        this.designs = byId.values().stream()
+                .sorted(Comparator.comparingInt((InterchangeDesign design) -> design.type().ordinal())
+                        .thenComparing(InterchangeDesign::id))
                 .toList();
     }
 
@@ -50,9 +50,9 @@ public final class InterchangeSelector {
                         .comparingInt((InterchangeEvaluation evaluation) ->
                                 evaluation.score().orElseThrow())
                         .thenComparing((left, right) -> Long.compareUnsigned(
-                                tieKey(site.selectionSeed(), left.design().type()),
-                                tieKey(site.selectionSeed(), right.design().type())))
-                        .thenComparingInt(evaluation -> evaluation.design().type().ordinal()))
+                                tieKey(site.selectionSeed(), left.design()),
+                                tieKey(site.selectionSeed(), right.design())))
+                        .thenComparing(evaluation -> evaluation.design().id()))
                 .map(InterchangeEvaluation::design);
 
         return new InterchangeDecision(site, selected, evaluations);
@@ -115,8 +115,14 @@ public final class InterchangeSelector {
                 + design.constructionComplexity() * 50;
     }
 
-    private static long tieKey(long seed, InterchangeType type) {
-        long value = seed ^ (0x9e3779b97f4a7c15L * (type.ordinal() + 1L));
+    private static long tieKey(long seed, InterchangeDesign design) {
+        long idHash = 0xcbf29ce484222325L;
+        String id = design.id().toString();
+        for (int index = 0; index < id.length(); index++) {
+            idHash ^= id.charAt(index);
+            idHash *= 0x100000001b3L;
+        }
+        long value = seed ^ idHash;
         value = (value ^ (value >>> 30)) * 0xbf58476d1ce4e5b9L;
         value = (value ^ (value >>> 27)) * 0x94d049bb133111ebL;
         return value ^ (value >>> 31);

@@ -1,5 +1,7 @@
 package net.austizz.lostcitiesroadfixes.interchange;
 
+import net.austizz.lostcitiesroadfixes.LostCitiesRoadFixes;
+
 import java.util.List;
 
 public final class InterchangeCatalogue {
@@ -41,6 +43,7 @@ public final class InterchangeCatalogue {
             int freeFlowMovements,
             int complexity) {
         return new InterchangeDesign(
+                new InterchangeDesignId(LostCitiesRoadFixes.MOD_ID, type.name().toLowerCase(java.util.Locale.ROOT)),
                 type,
                 form,
                 radius,
