@@ -28,6 +28,7 @@ jobs:
       - name: Verify IntelliJ model
         run: |
           chmod +x gradlew
+          python3 scripts/verify_intellij_dependency_metadata.py
           ./gradlew ideaModule --stacktrace
 
       - name: Test and build
