@@ -35,7 +35,7 @@ Allowed values are:
 - `junction_form`: `three_way` or `four_way`.
 - `capacity`: `local`, `regional`, or `high`.
 
-Dimensions are whole Minecraft blocks. `required_quadrants` must be from 1 through 4. Structure levels and construction complexity must be positive, and free-flow movement count cannot be negative.
+Dimensions are whole Minecraft blocks. `required_quadrants` must be from 1 through 4. Structure levels and construction complexity must be positive. Free-flow movement count must be from 0 through 6 for a three-way design or 0 through 12 for a four-way design. If `all_movements_free_flow` is true, that count must be 6 or 12 respectively.
 
 The selector first rejects a design that cannot physically or operationally fit. It then scores the remaining designs, so declarations should describe the actual footprint and capabilities rather than values intended to force selection.
 

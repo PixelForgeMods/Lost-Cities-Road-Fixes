@@ -29,8 +29,14 @@ public record InterchangeDesign(
         if (structureLevels < 1 || constructionComplexity < 1) {
             throw new IllegalArgumentException("Structure levels and complexity must be positive");
         }
-        if (freeFlowMovementCount < 0) {
-            throw new IllegalArgumentException("Free-flow movement count cannot be negative");
+        int movementCount = form == JunctionForm.THREE_WAY ? 6 : 12;
+        if (freeFlowMovementCount < 0 || freeFlowMovementCount > movementCount) {
+            throw new IllegalArgumentException(
+                    "Free-flow movement count must be between zero and " + movementCount);
+        }
+        if (allMovementsFreeFlow && freeFlowMovementCount != movementCount) {
+            throw new IllegalArgumentException(
+                    "An all-free-flow design must declare all " + movementCount + " movements");
         }
     }
 }
