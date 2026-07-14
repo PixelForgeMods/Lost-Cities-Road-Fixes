@@ -128,6 +128,48 @@ class RegionalPlanningDeterminismTest {
         }
     }
 
+    @Test
+    void evictsOldestRegionsAtTheConfiguredBoundAndRecomputesDeterministically() {
+        RegionalPlanCache<Long> cache = new RegionalPlanCache<>();
+        RoadPlanKey first = key(new PlanningRegion(0, 0));
+        RoadPlanKey second = key(new PlanningRegion(1, 0));
+        RoadPlanKey third = key(new PlanningRegion(2, 0));
+        AtomicInteger firstComputations = new AtomicInteger();
+
+        long expected = cache.getOrPlan(first, 2, ignored -> {
+            firstComputations.incrementAndGet();
+            return PlanningSeed.derive(first);
+        });
+        cache.getOrPlan(second, 2, PlanningSeed::derive);
+        cache.getOrPlan(third, 2, PlanningSeed::derive);
+
+        assertEquals(2, cache.size());
+        assertEquals(expected, cache.getOrPlan(first, 2, ignored -> {
+            firstComputations.incrementAndGet();
+            return PlanningSeed.derive(first);
+        }));
+        assertEquals(2, firstComputations.get(), "the oldest region must be recomputed after eviction");
+        assertEquals(2, cache.size());
+    }
+
+    @Test
+    void concurrentInsertionsSettleAtTheConfiguredBound() throws Exception {
+        RegionalPlanCache<Long> cache = new RegionalPlanCache<>();
+        try (var executor = Executors.newFixedThreadPool(8)) {
+            List<Future<Long>> futures = new ArrayList<>();
+            for (int index = 0; index < 128; index++) {
+                RoadPlanKey candidate = key(new PlanningRegion(index, -index));
+                futures.add(executor.submit(() ->
+                        cache.getOrPlan(candidate, 16, PlanningSeed::derive)));
+            }
+            for (Future<Long> future : futures) {
+                future.get();
+            }
+        }
+
+        assertEquals(16, cache.size());
+    }
+
     private static RoadPlanKey key(PlanningRegion region) {
         return new RoadPlanKey(WORLD_SEED, "minecraft:overworld", region, "rules-v1");
     }

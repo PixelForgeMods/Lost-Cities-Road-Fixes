@@ -13,8 +13,22 @@ final class RuntimePlanCaches<R, I> {
         return roads.getOrPlan(key, planner);
     }
 
+    R roadPlan(
+            RoadPlanKey key,
+            int maximumEntries,
+            Function<RoadPlanKey, R> planner) {
+        return roads.getOrPlan(key, maximumEntries, planner);
+    }
+
     I interchangePlan(RoadPlanKey key, Function<RoadPlanKey, I> planner) {
         return interchanges.getOrPlan(key, planner);
+    }
+
+    I interchangePlan(
+            RoadPlanKey key,
+            int maximumEntries,
+            Function<RoadPlanKey, I> planner) {
+        return interchanges.getOrPlan(key, maximumEntries, planner);
     }
 
     void invalidateAll() {

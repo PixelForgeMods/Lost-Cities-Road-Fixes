@@ -19,10 +19,22 @@ public final class RoadThemeResources {
     }
 
     public static CompiledRoadTheme active() {
-        return COMPILED.get().stream()
+        return active(RoadThemeCatalogue.DEFAULT_ID);
+    }
+
+    public static CompiledRoadTheme active(RoadThemeId requested) {
+        List<CompiledRoadTheme> snapshot = COMPILED.get();
+        return snapshot.stream()
+                .filter(theme -> theme.id().equals(requested))
+                .findFirst()
+                .orElseGet(() -> snapshot.stream()
                 .filter(theme -> theme.id().equals(RoadThemeCatalogue.DEFAULT_ID))
                 .findFirst()
-                .orElseThrow();
+                .orElseThrow());
+    }
+
+    public static int loadedThemeCount() {
+        return COMPILED.get().size();
     }
 
     public static synchronized void install(Map<RoadThemeId, RoadTheme> custom) {
