@@ -1,6 +1,6 @@
-package net.austizz.lostcitiesroadfixes.regression;
+package net.austizz.lostcitiesroadfixes.road;
 
-public record ChunkCoordinate(int x, int z) {
+public record ChunkPoint(int x, int z) {
     public int minBlockX() {
         return x << 4;
     }

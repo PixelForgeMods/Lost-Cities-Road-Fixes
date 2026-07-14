@@ -1,12 +1,12 @@
 package net.austizz.lostcitiesroadfixes.gametest;
 
 import net.austizz.lostcitiesroadfixes.LostCitiesRoadFixes;
-import net.austizz.lostcitiesroadfixes.regression.BlockCoordinate;
 import net.austizz.lostcitiesroadfixes.regression.GenerationPhase;
 import net.austizz.lostcitiesroadfixes.regression.LostCitiesCleanupRule;
 import net.austizz.lostcitiesroadfixes.regression.LostCitiesDamageOracle;
 import net.austizz.lostcitiesroadfixes.regression.MiniExplosionSettings;
 import net.austizz.lostcitiesroadfixes.regression.ReportedGapIncident;
+import net.austizz.lostcitiesroadfixes.road.BlockPoint;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -31,7 +31,7 @@ public final class ReportedGapGameTests {
 
         if (explosion == null
                 || explosion.radius() != 7
-                || !explosion.center().equals(new BlockCoordinate(-1023, 70, -2225))
+                || !explosion.center().equals(new BlockPoint(-1023, 70, -2225))
                 || !explosion.intersects(incident.gapChunk())
                 || !LostCitiesCleanupRule.deletesBlocksAbove(15)
                 || incident.requiredRepairPhase() != GenerationPhase.AFTER_LOST_CITIES_CLEANUP) {
