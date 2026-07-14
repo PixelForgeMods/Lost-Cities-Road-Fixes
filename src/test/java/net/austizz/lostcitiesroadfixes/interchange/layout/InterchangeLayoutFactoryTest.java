@@ -2,8 +2,10 @@ package net.austizz.lostcitiesroadfixes.interchange.layout;
 
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeCatalogue;
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeDesign;
+import net.austizz.lostcitiesroadfixes.interchange.InterchangeDesignId;
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeType;
 import net.austizz.lostcitiesroadfixes.interchange.JunctionForm;
+import net.austizz.lostcitiesroadfixes.interchange.TrafficDemand;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.PlanarPoint;
 import net.austizz.lostcitiesroadfixes.road.HalfBlockElevation;
 import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
@@ -11,7 +13,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -123,6 +128,179 @@ class InterchangeLayoutFactoryTest {
                 assertTrue(hasControlledConnection, design.id().toString());
             }
         }
+    }
+
+    @Test
+    void compilesCustomMovementFormsAndPropertiesToExactNativePorts() {
+        InterchangeDesign design = customFourWayDesign();
+
+        InterchangeLayout layout = factory.create(design, SITE);
+
+        InterchangeConnection direct = connection(
+                layout, ApproachDirection.WEST, ApproachDirection.SOUTH);
+        assertEquals(RampForm.DIRECT, direct.form());
+        assertEquals(RampControl.YIELD, direct.control());
+        assertEquals(11, direct.route().widthBlocks());
+        assertEquals(1, direct.structureLevel());
+
+        InterchangeConnection loop = connection(
+                layout, ApproachDirection.WEST, ApproachDirection.NORTH);
+        assertEquals(RampForm.LOOP, loop.form());
+        assertEquals(RampControl.FREE_FLOW, loop.control());
+        assertEquals(10, loop.route().widthBlocks());
+        assertEquals(2, loop.structureLevel());
+
+        assertExactPorts(layout);
+    }
+
+    @Test
+    void rotatesCanonicalThreeWayGeometryToTheSurveyedMissingApproach() {
+        InterchangeDesign design = customThreeWayDesign();
+        Set<ApproachDirection> approaches = EnumSet.of(
+                ApproachDirection.NORTH,
+                ApproachDirection.SOUTH,
+                ApproachDirection.WEST);
+
+        InterchangeLayout layout = factory.create(design, SITE, approaches);
+
+        assertEquals(approaches, layout.approaches());
+        assertEquals(6, layout.connections().size());
+        assertEquals(13, connection(
+                layout, ApproachDirection.NORTH, ApproachDirection.WEST)
+                .route().widthBlocks(),
+                "canonical west-to-south must rotate when east is the missing approach");
+        assertExactPorts(layout);
+    }
+
+    private static InterchangeConnection connection(
+            InterchangeLayout layout,
+            ApproachDirection from,
+            ApproachDirection to) {
+        return layout.connections().stream()
+                .filter(candidate -> candidate.movement().from() == from
+                        && candidate.movement().to() == to)
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static void assertExactPorts(InterchangeLayout layout) {
+        for (InterchangeConnection connection : layout.connections()) {
+            InterchangePort start = layout.site().port(
+                    connection.movement().from(), TrafficFlow.INBOUND);
+            InterchangePort end = layout.site().port(
+                    connection.movement().to(), TrafficFlow.OUTBOUND);
+            assertPoint(start.point(), connection.route().centerline().startPose().point());
+            assertPoint(end.point(), connection.route().centerline().endPose().point());
+            assertEquals(start.elevation(), connection.route().centerline().startElevation());
+            assertEquals(end.elevation(), connection.route().centerline().endElevation());
+        }
+    }
+
+    private static InterchangeDesign customFourWayDesign() {
+        List<InterchangeMovementBlueprint> movements = new ArrayList<>();
+        for (ApproachDirection from : ApproachDirection.values()) {
+            movements.add(blueprint(from, MovementKind.STRAIGHT, RampForm.MAINLINE,
+                    RampControl.FREE_FLOW, 8, 1));
+            movements.add(blueprint(from, MovementKind.RIGHT, RampForm.DIRECT,
+                    RampControl.YIELD, from == ApproachDirection.WEST ? 11 : 8, 1));
+            boolean loop = from == ApproachDirection.WEST;
+            movements.add(blueprint(from, MovementKind.LEFT,
+                    loop ? RampForm.LOOP : RampForm.DIRECT,
+                    loop ? RampControl.FREE_FLOW : RampControl.SIGNALIZED,
+                    loop ? 10 : 8,
+                    2));
+        }
+        return design(
+                "example:custom_four_way",
+                InterchangeType.PARTIAL_CLOVERLEAF,
+                JunctionForm.FOUR_WAY,
+                2,
+                true,
+                false,
+                5,
+                movements);
+    }
+
+    private static InterchangeDesign customThreeWayDesign() {
+        Set<ApproachDirection> canonical = EnumSet.of(
+                ApproachDirection.WEST,
+                ApproachDirection.EAST,
+                ApproachDirection.SOUTH);
+        List<InterchangeMovementBlueprint> movements = new ArrayList<>();
+        for (ApproachDirection from : canonical) {
+            for (MovementKind kind : MovementKind.values()) {
+                ApproachDirection to = destination(from, kind);
+                if (!canonical.contains(to)) {
+                    continue;
+                }
+                movements.add(blueprint(
+                        from,
+                        kind,
+                        kind == MovementKind.STRAIGHT ? RampForm.MAINLINE : RampForm.DIRECT,
+                        RampControl.FREE_FLOW,
+                        from == ApproachDirection.WEST && kind == MovementKind.RIGHT ? 13 : 8,
+                        kind == MovementKind.LEFT ? 2 : 1));
+            }
+        }
+        return design(
+                "example:custom_three_way",
+                InterchangeType.THREE_WAY_DIRECTIONAL,
+                JunctionForm.THREE_WAY,
+                2,
+                false,
+                true,
+                6,
+                movements);
+    }
+
+    private static InterchangeDesign design(
+            String id,
+            InterchangeType type,
+            JunctionForm form,
+            int levels,
+            boolean loops,
+            boolean allFreeFlow,
+            int freeFlowMovements,
+            List<InterchangeMovementBlueprint> movements) {
+        return new InterchangeDesign(
+                InterchangeDesignId.parse(id),
+                type,
+                form,
+                64,
+                2,
+                112,
+                levels,
+                loops,
+                allFreeFlow,
+                TrafficDemand.REGIONAL,
+                freeFlowMovements,
+                3,
+                Optional.of(new InterchangeGeometryBlueprint(movements)));
+    }
+
+    private static InterchangeMovementBlueprint blueprint(
+            ApproachDirection from,
+            MovementKind kind,
+            RampForm form,
+            RampControl control,
+            int width,
+            int level) {
+        return new InterchangeMovementBlueprint(
+                new InterchangeMovement(from, destination(from, kind), kind),
+                form,
+                control,
+                width,
+                level);
+    }
+
+    private static ApproachDirection destination(
+            ApproachDirection from,
+            MovementKind kind) {
+        return switch (kind) {
+            case STRAIGHT -> from.opposite();
+            case RIGHT -> from.rightTurnDestination();
+            case LEFT -> from.leftTurnDestination();
+        };
     }
 
     private static void assertPoint(PlanarPoint expected, PlanarPoint actual) {

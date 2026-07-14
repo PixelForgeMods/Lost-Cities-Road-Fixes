@@ -17,7 +17,9 @@ The addon suppresses Lost Cities' native highway block placement while retaining
 
 Only newly generated chunks are changed. Install the addon before exploring or pregenerating the area that should use replacement roads; it does not rewrite already saved chunks.
 
-Pack authors can add or replace calculated interchange declarations with server datapacks. See [the custom-interchange format](docs/datapacks/interchanges.md).
+Pack authors can add or replace calculated interchange declarations—including
+complete movement geometry, controls, widths, and structural tiers—with server
+datapacks. See [the custom-interchange format](docs/datapacks/interchanges.md).
 
 ## Development
 

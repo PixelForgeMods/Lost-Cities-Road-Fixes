@@ -15,6 +15,6 @@ public final class InterchangeDesignFingerprint {
     public static String of(List<InterchangeDesign> designs) {
         Objects.requireNonNull(designs, "designs");
         List<InterchangeDesign> ordered = designs.stream().sorted(ORDER).toList();
-        return "interchange-designs-v1|" + ordered;
+        return "interchange-designs-v2|" + ordered;
     }
 }
