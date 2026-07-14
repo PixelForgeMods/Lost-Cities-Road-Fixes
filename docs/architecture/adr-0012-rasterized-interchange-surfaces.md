@@ -14,4 +14,4 @@ The full-width arterial rasterizer owns mainline coverage. Eight-block turning r
 
 ## Consequences
 
-Interchange decks retain road markings and width through chunk boundaries, return to native roads at the planning envelope, and preserve vertical separation at crossings. Runtime integration can remove replaced native tiles, merge the bounded interchange surface with unaffected roads, and write one deterministic chunk-local result.
+Interchange decks retain road markings and width through chunk boundaries, return to native roads at the planning envelope, and preserve vertical separation at crossings. Runtime integration can mask the exact replaced native cells, merge the bounded interchange surface with unaffected roads, and write one deterministic chunk-local result.
