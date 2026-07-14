@@ -78,6 +78,7 @@ alias for `lostcitiesroadfixes`.
 - Lost Cities binary compatibility state;
 - native-suppression and late-render hook counts;
 - planned, selected, rejected, and rendered interchange counts;
+- conflict-suppressed interchange counts, distinct from infeasible sites;
 - current road/interchange cache sizes;
 - loaded design/theme counts;
 - configured and resolved theme IDs and fallback state;
@@ -86,3 +87,17 @@ alias for `lostcitiesroadfixes`.
 `clear_caches` atomically replaces both regional cache generations. It does not
 modify generated chunks or reset counters; later requests deterministically
 rebuild the needed plans.
+
+## Dense crossing conflicts
+
+Lost Cities can place parallel highway lines only eight chunks apart. A full
+interchange may require more than half of that spacing on both sides, so two
+neighboring structures cannot always coexist without overlapping. This safety
+policy is intentionally not configurable.
+
+The planner reserves each selected design's declared core and admits only the
+stable higher-priority candidate when cores overlap. A suppressed crossing keeps
+both highways available for straight-through driving but receives no partial
+ramps. `/lostcitiesroadfixes status` reports these as `conflicted`; `rejected`
+continues to mean that no design met the site's grade, radius, capacity, or
+clearance requirements.

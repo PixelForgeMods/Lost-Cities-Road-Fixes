@@ -13,12 +13,15 @@ import java.util.Objects;
 public final class InterchangeRegionalPlanner {
     private final RoadCrossingSurveyor surveyor;
     private final InterchangeSelector selector;
+    private final InterchangeConflictResolver conflictResolver;
 
     public InterchangeRegionalPlanner(
             RoadCrossingSurveyor surveyor,
-            InterchangeSelector selector) {
+            InterchangeSelector selector,
+            InterchangeConflictResolver conflictResolver) {
         this.surveyor = Objects.requireNonNull(surveyor, "surveyor");
         this.selector = Objects.requireNonNull(selector, "selector");
+        this.conflictResolver = Objects.requireNonNull(conflictResolver, "conflictResolver");
     }
 
     public RegionalInterchangePlan plan(
@@ -42,25 +45,37 @@ public final class InterchangeRegionalPlanner {
         Objects.requireNonNull(bounds, "bounds");
         Objects.requireNonNull(roads, "roads");
         Objects.requireNonNull(elevations, "elevations");
-        List<PlannedInterchange> selected = new ArrayList<>();
+        List<PlannedInterchange> candidates = new ArrayList<>();
         List<RejectedRoadCrossing> rejected = new ArrayList<>();
 
-        for (int z = bounds.minZ(); z <= bounds.maxZ(); z++) {
-            for (int x = bounds.minX(); x <= bounds.maxX(); x++) {
+        ChunkBounds surveyBounds = conflictResolver.surveyBounds(bounds);
+        for (int z = surveyBounds.minZ(); z <= surveyBounds.maxZ(); z++) {
+            for (int x = surveyBounds.minX(); x <= surveyBounds.maxX(); x++) {
                 ChunkPoint chunk = new ChunkPoint(x, z);
-                if (!key.region().owns(chunk)) {
-                    continue;
-                }
                 surveyor.survey(chunk, roads, elevations, key.worldSeed()).ifPresent(crossing -> {
                     InterchangeDecision decision = selector.select(crossing.selectionSite());
                     if (decision.selected().isPresent()) {
-                        selected.add(new PlannedInterchange(crossing, decision));
-                    } else {
+                        candidates.add(new PlannedInterchange(crossing, decision));
+                    } else if (ownsOutput(key, bounds, chunk)) {
                         rejected.add(new RejectedRoadCrossing(crossing, decision));
                     }
                 });
             }
         }
-        return new RegionalInterchangePlan(key, selected, rejected);
+        InterchangeConflictResolution resolution = conflictResolver.resolve(candidates);
+        List<PlannedInterchange> selected = resolution.interchanges().stream()
+                .filter(interchange -> ownsOutput(key, bounds, interchange.crossing().chunk()))
+                .toList();
+        List<ConflictedRoadCrossing> conflicts = resolution.conflicts().stream()
+                .filter(conflict -> ownsOutput(key, bounds, conflict.crossing().chunk()))
+                .toList();
+        return new RegionalInterchangePlan(key, selected, rejected, conflicts);
+    }
+
+    private static boolean ownsOutput(
+            RoadPlanKey key,
+            ChunkBounds bounds,
+            ChunkPoint chunk) {
+        return bounds.contains(chunk) && key.region().owns(chunk);
     }
 }

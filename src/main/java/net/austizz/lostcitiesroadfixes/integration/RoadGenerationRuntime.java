@@ -12,6 +12,7 @@ import net.austizz.lostcitiesroadfixes.interchange.InterchangeDesignResources;
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeSelector;
 import net.austizz.lostcitiesroadfixes.interchange.layout.InterchangeLayoutFactory;
 import net.austizz.lostcitiesroadfixes.interchange.planning.CrossingElevationModel;
+import net.austizz.lostcitiesroadfixes.interchange.planning.InterchangeConflictResolver;
 import net.austizz.lostcitiesroadfixes.interchange.planning.InterchangeRegionalPlanner;
 import net.austizz.lostcitiesroadfixes.interchange.planning.RegionalInterchangePlan;
 import net.austizz.lostcitiesroadfixes.interchange.planning.RoadCrossingSurveyor;
@@ -54,6 +55,7 @@ public final class RoadGenerationRuntime {
     private static final AtomicLong INTERCHANGE_REGIONS_PLANNED = new AtomicLong();
     private static final AtomicLong SELECTED_INTERCHANGES_PLANNED = new AtomicLong();
     private static final AtomicLong REJECTED_CROSSINGS_PLANNED = new AtomicLong();
+    private static final AtomicLong CONFLICTED_CROSSINGS_PLANNED = new AtomicLong();
     private static final AtomicLong INTERCHANGE_RENDER_INVOCATIONS = new AtomicLong();
 
     private RoadGenerationRuntime() {
@@ -85,6 +87,10 @@ public final class RoadGenerationRuntime {
         return REJECTED_CROSSINGS_PLANNED.get();
     }
 
+    public static long conflictedCrossingPlanCount() {
+        return CONFLICTED_CROSSINGS_PLANNED.get();
+    }
+
     public static long interchangeRenderInvocationCount() {
         return INTERCHANGE_RENDER_INVOCATIONS.get();
     }
@@ -107,6 +113,7 @@ public final class RoadGenerationRuntime {
                 interchangeRegionPlanCount(),
                 selectedInterchangePlanCount(),
                 rejectedCrossingPlanCount(),
+                conflictedCrossingPlanCount(),
                 interchangeRenderInvocationCount(),
                 roadPlanCacheSize(),
                 interchangePlanCacheSize(),
@@ -257,7 +264,8 @@ public final class RoadGenerationRuntime {
                 ROAD_STANDARD);
         InterchangeRegionalPlanner planner = new InterchangeRegionalPlanner(
                 new RoadCrossingSurveyor(MAXIMUM_INTERCHANGE_APPROACH_BLOCKS, ROAD_STANDARD),
-                new InterchangeSelector(designs, ROAD_STANDARD));
+                new InterchangeSelector(designs, ROAD_STANDARD),
+                new InterchangeConflictResolver(ROAD_STANDARD));
         RegionalInterchangePlan selected = planner.plan(key, roadLookup, elevations);
         List<PlannedInterchangeGeometry> geometry = selected.interchanges().stream()
                 .map(GEOMETRY_PLANNER::create)
@@ -265,6 +273,7 @@ public final class RoadGenerationRuntime {
 
         INTERCHANGE_REGIONS_PLANNED.incrementAndGet();
         REJECTED_CROSSINGS_PLANNED.addAndGet(selected.rejectedCrossings().size());
+        CONFLICTED_CROSSINGS_PLANNED.addAndGet(selected.conflictedCrossings().size());
         if (!geometry.isEmpty()) {
             long previous = SELECTED_INTERCHANGES_PLANNED.getAndAdd(geometry.size());
             if (previous == 0 && settings.logFirstInterchangeSelection()) {
@@ -277,7 +286,10 @@ public final class RoadGenerationRuntime {
             }
         }
         return new RegionalInterchangeGeometryPlan(
-                key, geometry, selected.rejectedCrossings().size());
+                key,
+                geometry,
+                selected.rejectedCrossings().size(),
+                selected.conflictedCrossings().size());
     }
 
     private static RoadPlanKey keyFor(
@@ -309,7 +321,7 @@ public final class RoadGenerationRuntime {
             LostCityProfile profile,
             String designFingerprint,
             RoadOperationalSettings settings) {
-        return "runtime-interchanges-v1|"
+        return "runtime-interchanges-v2|dense-core-reservations-v1|"
                 + roadRulesFingerprint(profile, settings)
                 + '|'
                 + designFingerprint;

@@ -11,7 +11,8 @@ import java.util.Objects;
 public record RegionalInterchangeGeometryPlan(
         RoadPlanKey key,
         List<PlannedInterchangeGeometry> interchanges,
-        int rejectedCrossingCount) {
+        int rejectedCrossingCount,
+        int conflictedCrossingCount) {
     public RegionalInterchangeGeometryPlan {
         Objects.requireNonNull(key, "key");
         interchanges = List.copyOf(Objects.requireNonNull(interchanges, "interchanges").stream()
@@ -19,6 +20,9 @@ public record RegionalInterchangeGeometryPlan(
                 .toList());
         if (rejectedCrossingCount < 0) {
             throw new IllegalArgumentException("Rejected crossing count cannot be negative");
+        }
+        if (conflictedCrossingCount < 0) {
+            throw new IllegalArgumentException("Conflicted crossing count cannot be negative");
         }
         for (PlannedInterchangeGeometry geometry : interchanges) {
             if (!key.region().owns(geometry.plan().crossing().chunk())) {
