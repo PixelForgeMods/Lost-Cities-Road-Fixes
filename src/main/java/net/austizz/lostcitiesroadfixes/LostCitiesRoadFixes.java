@@ -5,6 +5,7 @@ import net.austizz.lostcitiesroadfixes.compat.LostCitiesCompatibility;
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeDesignReloadListener;
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeDesignResources;
 import net.austizz.lostcitiesroadfixes.integration.RoadGenerationRuntime;
+import net.austizz.lostcitiesroadfixes.theme.RoadThemeReloadListener;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
@@ -23,6 +24,7 @@ public final class LostCitiesRoadFixes {
     }
 
     private static void addReloadListeners(AddReloadListenerEvent event) {
+        event.addListener(new RoadThemeReloadListener());
         event.addListener(new InterchangeDesignReloadListener(
                 InterchangeDesignResources.repository(),
                 RoadGenerationRuntime::invalidatePlans));

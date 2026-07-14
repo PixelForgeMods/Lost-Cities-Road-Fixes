@@ -20,6 +20,8 @@ Only newly generated chunks are changed. Install the addon before exploring or p
 Pack authors can add or replace calculated interchange declarations—including
 complete movement geometry, controls, widths, and structural tiers—with server
 datapacks. See [the custom-interchange format](docs/datapacks/interchanges.md).
+Road materials and support blocks can also be replaced with
+[datapack road themes](docs/datapacks/road-themes.md).
 
 ## Development
 
