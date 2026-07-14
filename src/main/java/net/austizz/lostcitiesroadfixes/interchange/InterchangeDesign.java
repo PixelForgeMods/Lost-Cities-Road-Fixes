@@ -3,6 +3,7 @@ package net.austizz.lostcitiesroadfixes.interchange;
 import java.util.Objects;
 
 public record InterchangeDesign(
+        InterchangeDesignId id,
         InterchangeType type,
         JunctionForm form,
         int minimumRadiusBlocks,
@@ -15,6 +16,7 @@ public record InterchangeDesign(
         int freeFlowMovementCount,
         int constructionComplexity) {
     public InterchangeDesign {
+        Objects.requireNonNull(id, "id");
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(form, "form");
         Objects.requireNonNull(capacity, "capacity");

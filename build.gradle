@@ -136,6 +136,7 @@ dependencies {
     implementation 'maven.modrinth:8VDCUS3b:k60WL1kI'
 
     testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'com.google.code.gson:gson:2.10.1'
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testRuntimeOnly 'org.ow2.asm:asm:9.8'

@@ -17,6 +17,8 @@ The addon suppresses Lost Cities' native highway block placement while retaining
 
 Only newly generated chunks are changed. Install the addon before exploring or pregenerating the area that should use replacement roads; it does not rewrite already saved chunks.
 
+Pack authors can add or replace calculated interchange declarations with server datapacks. See [the custom-interchange format](docs/datapacks/interchanges.md).
+
 ## Development
 
 ```text
@@ -24,7 +26,7 @@ gradlew.bat test build
 gradlew.bat runGameTestServer
 ```
 
-The project uses the official NeoForge ModDevGradle template and resolves Lost Cities from Modrinth Maven. Interchange manifests and authoring documentation are added in independently tested Scrum increments.
+The project uses the official NeoForge ModDevGradle template and resolves Lost Cities from Modrinth Maven. Features are delivered as independently tested Scrum increments.
 
 ## License
 
