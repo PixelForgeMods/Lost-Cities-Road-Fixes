@@ -64,6 +64,10 @@ public record RoadDiagnosticsSnapshot(
                         + ", logFirstInterchangeSelection=" + logFirstInterchangeSelection);
     }
 
+    public String compactLine() {
+        return String.join(" | ", lines());
+    }
+
     private static void requireNonNegative(long value, String name) {
         if (value < 0) {
             throw new IllegalArgumentException(name + " cannot be negative");

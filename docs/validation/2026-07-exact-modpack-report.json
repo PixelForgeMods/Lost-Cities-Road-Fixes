@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "validated_local": "2026-07-15T00:10:32+02:00",
+  "result": "pass",
+  "story": "US-21",
+  "issue": "https://github.com/PixelForgeMods/Lost-Cities-Road-Fixes/issues/45",
+  "environment": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.235",
+    "java": "21.0.4+7-LTS",
+    "lost_cities": "1.21-8.3.10",
+    "lost_cities_sha256": "26db73013028ad724af030aa30cbd8dd62da8b951645b8d02f066c8af083a52f",
+    "client_jar_count": 173,
+    "runtime_jar_count_with_addon": 174,
+    "runtime_jar_manifest_sha256": "ae6b748c0d05c645604ce89404112ff4f2e927642535b11e451c25a4503c7400",
+    "instance_config_count": 315,
+    "instance_config_manifest_sha256": "e9fec65be246c807fbe4bac020e18b52c45c98071033b4f0bcbbf63aea278f0e",
+    "world_serverconfig_count": 5,
+    "world_serverconfig_manifest_sha256": "bdb806689d1f6923f95f80c5849ed6be50d1197830892b7eec32de87587d4c5b"
+  },
+  "production_jar": {
+    "name": "lostcitiesroadfixes-1.0.0+mc1.21.1.jar",
+    "size": 282818,
+    "sha256": "1ed5d4eedfa2ab36f91866d7d6c2c8d404d15513c9fc230b36e39bff4576867e"
+  },
+  "profile": {
+    "base": "default",
+    "runtime_name": "customized",
+    "seed": -6377442428365110436,
+    "dimension": "minecraft:overworld",
+    "ground_level": 71,
+    "highway_distance_mask": 7,
+    "highway_main_perlin_scale": 50.0,
+    "highway_secondary_perlin_scale": 10.0,
+    "highway_perlin_factor": 2.0,
+    "highway_supports": true,
+    "reported_gap_chunk": [-64, -139],
+    "damage_source_chunk": [-64, -140]
+  },
+  "config_files": {
+    "create_cities_subways/example_preset.json": "77eb4fd9211aa8cab29eaf6c62ce79722b3916c361496bffbbc3eec86bdc0870",
+    "lostcities-server.toml": "4fcec3090d3614993404ac47e15df1d83a7642ce23fbd1ef97cfdd11157703f7",
+    "lostcities/common.toml": "c0b572ed62e8e39cb320907a87e3ead675ac56f5d62fcc311ab6a5bcb4cc22ed"
+  },
+  "save_safety": {
+    "original_tree_file_count": 744,
+    "before_aggregate_sha256": "1f4d1d96a10b2a9b924c01dd1f7894151595cf34f177e76e4e49438f84db5a7d",
+    "after_aggregate_sha256": "1f4d1d96a10b2a9b924c01dd1f7894151595cf34f177e76e4e49438f84db5a7d",
+    "added_files": 0,
+    "removed_files": 0,
+    "changed_files": 0,
+    "identical": true
+  },
+  "runtime": {
+    "compatibility_probe_passed": true,
+    "road_fixes_exceptions": 0,
+    "replacement_render_hook_activated": true,
+    "native_highway_hook_activated": true,
+    "player_joined_at_reported_location": true,
+    "all_dimensions_saved": true,
+    "startup_ms": {
+      "modlauncher_to_compatibility_probe": 6079,
+      "modlauncher_to_player_login": 66944
+    },
+    "start_region_generation_ms": {
+      "exact_pack_without_addon": 5216,
+      "exact_pack_with_production_addon": 6857,
+      "observed_delta_ms": 1641,
+      "observed_delta_percent": 31.46,
+      "sample_count_per_variant": 1
+    },
+    "shutdown_diagnostics": {
+      "native_suppressions": 580,
+      "late_render_invocations": 1135,
+      "interchange_regions_planned": 8,
+      "selected_interchanges": 1,
+      "rejected_crossings": 1,
+      "conflicted_crossings": 0,
+      "interchange_render_invocations": 0,
+      "road_cache_size": 26,
+      "interchange_cache_size": 8,
+      "maximum_cached_regions_per_cache": 512,
+      "loaded_designs": 8,
+      "loaded_themes": 1
+    }
+  },
+  "road_continuity": {
+    "y": 71,
+    "z_chunks": [-142, -141, -140, -139, -138, -137, -136],
+    "native_surface_counts": [160, 160, 129, 0, 160, 160, 160],
+    "replacement_surface_counts": [224, 224, 224, 224, 224, 224, 224],
+    "replacement_north_edge_cells": [14, 14, 14, 14, 14, 14, 14],
+    "replacement_south_edge_cells": [14, 14, 14, 14, 14, 14, 14],
+    "missing_generated_chunks": 0,
+    "former_gap_continuous": true
+  },
+  "interchange": {
+    "selection_observed": true,
+    "design": "lostcitiesroadfixes:cloverleaf",
+    "site_chunk": [-112, -192]
+  },
+  "evidence_sha256": {
+    "exact_pack_final_run.log": "753ab8b1c8ed41929b43dd716087c5d66691ed09d8f6855d876209d5ecd601dc",
+    "exact_pack_baseline_no_addon.log": "0b88145675ae440e9637608820b7bc98f9c070e0c1096e6dd9d2a621e8d9b3ed",
+    "final_reported_gap_region.json": "8cc4e7eb6b0f4ed21b22a6384e7df3164ed4356a2d201092b4e369b251434fde",
+    "baseline_native_road_region.json": "256764af46f721ad475c256c9c50299b09c9a947bba6a00ac3b05aeee592e2b4"
+  },
+  "notes": [
+    "Timing is a paired cold-generation observation, not a statistically sampled benchmark.",
+    "The original save's target terrain region files were zero-byte placeholders, so native before-data came from an isolated fresh control generated from the same seed, player metadata, profile, configs, and 173 jars.",
+    "A separate reload exposed a pre-existing Create/Ponder client payload exception after world entry; it did not occur in the final production-jar run and no stack trace implicated Lost Cities: Road Fixes."
+  ]
+}

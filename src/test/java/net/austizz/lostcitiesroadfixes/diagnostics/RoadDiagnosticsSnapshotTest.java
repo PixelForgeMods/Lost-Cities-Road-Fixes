@@ -41,6 +41,7 @@ class RoadDiagnosticsSnapshotTest {
         assertTrue(lines.stream().anyMatch(line -> line.contains("example:requested")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("fallback=true")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("maximumGapChunks=4")));
+        assertEquals(String.join(" | ", lines), snapshot.compactLine());
         assertThrows(UnsupportedOperationException.class, () -> lines.clear());
     }
 

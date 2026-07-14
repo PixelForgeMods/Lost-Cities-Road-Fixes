@@ -24,6 +24,9 @@ Road materials and support blocks can also be replaced with
 [datapack road themes](docs/datapacks/road-themes.md).
 Server operators can use the bounded [server configuration and diagnostics](docs/configuration.md).
 
+The client's exact 173-jar pack and reported seed were reproduced in an isolated
+world. See the [release validation evidence](docs/validation/2026-07-exact-modpack.md).
+
 Closely spaced crossings are coordinated before geometry is emitted. When two
 safe interchange cores physically cannot coexist, a stable world-derived winner
 receives the complete interchange and the other crossing remains an intact
