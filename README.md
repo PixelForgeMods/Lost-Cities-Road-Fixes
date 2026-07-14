@@ -16,7 +16,7 @@ The mod is intentionally pinned to one Lost Cities build because its compatibili
 Back up the world, place the universal JAR in the server and client `mods`
 folders, and install it before exploring or pregenerating affected terrain.
 Road Fixes only changes newly generated chunks. See the
-[1.0.0 release notes](docs/release/1.0.0.md) and [changelog](CHANGELOG.md).
+[1.0.1 release notes](docs/release/1.0.1.md) and [changelog](CHANGELOG.md).
 
 ## Generation behavior
 
@@ -33,6 +33,8 @@ Server operators can use the bounded [server configuration and diagnostics](docs
 
 The client's exact 173-jar pack and reported seed were reproduced in an isolated
 world. See the [release validation evidence](docs/validation/2026-07-exact-modpack.md).
+The reported 18-block stacked crossing was also replayed from a fresh copy of
+that seed; see the [stacked-interchange regression](docs/regressions/2026-07-stacked-interchange-level-gap.md).
 
 Closely spaced crossings are coordinated before geometry is emitted. When two
 safe interchange cores physically cannot coexist, a stable world-derived winner

@@ -4,6 +4,7 @@ import net.austizz.lostcitiesroadfixes.interchange.geometry.RampRoute;
 import net.austizz.lostcitiesroadfixes.render.ChunkRoadSurface;
 import net.austizz.lostcitiesroadfixes.render.RampSurfaceRasterizer;
 import net.austizz.lostcitiesroadfixes.road.ChunkPoint;
+import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -13,7 +14,9 @@ import java.util.Objects;
 public final class InterchangeSurfaceRasterizer {
     private final GradedArterialRasterizer arterialRasterizer = new GradedArterialRasterizer();
     private final RampSurfaceRasterizer rampRasterizer = new RampSurfaceRasterizer();
-    private final ChunkRoadSurfaceMerger merger = new ChunkRoadSurfaceMerger();
+    private final VerticalClearanceSurfaceMerger clearanceMerger =
+            new VerticalClearanceSurfaceMerger(
+                    RoadDesignStandard.DEFAULT.minimumVehicleClearanceBlocks());
 
     public ChunkRoadSurface rasterize(
             ChunkPoint targetChunk,
@@ -26,8 +29,9 @@ public final class InterchangeSurfaceRasterizer {
             arterials.addAll(interchange.arterials());
             ramps.addAll(interchange.turningRoutes());
         }
-        return merger.merge(targetChunk, List.of(
-                arterialRasterizer.rasterize(targetChunk, arterials),
-                rampRasterizer.rasterize(targetChunk, ramps)));
+        ChunkRoadSurface arterialSurface = arterialRasterizer.rasterize(
+                targetChunk, arterials);
+        ChunkRoadSurface rampSurface = rampRasterizer.rasterize(targetChunk, ramps);
+        return clearanceMerger.merge(targetChunk, arterialSurface, rampSurface);
     }
 }

@@ -13,7 +13,6 @@ from zipfile import BadZipFile, ZipFile, ZipInfo
 
 MOD_ID = "lostcitiesroadfixes"
 MOD_NAME = "Lost Cities: Road Fixes"
-MOD_VERSION = "1.0.0+mc1.21.1"
 MOD_OWNER = "Austizz_tds"
 MINECRAFT_VERSION = "1.21.1"
 NEOFORGE_RANGE = "[21.1.235,)"
@@ -38,6 +37,18 @@ FORBIDDEN_SUFFIXES = (".bbmodel", ".java", ".pyc", ".pyo")
 
 class VerificationError(ValueError):
     """Raised when a release artifact violates its contract."""
+
+
+def project_mod_version(project_root: Path) -> str:
+    properties = project_root / "gradle.properties"
+    for raw_line in properties.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        key, separator, value = line.partition("=")
+        if separator and key.strip() == "mod_version" and value.strip():
+            return value.strip()
+    raise VerificationError("gradle.properties does not declare mod_version")
 
 
 def sha256(data: bytes) -> str:
@@ -96,8 +107,11 @@ def require_dependency(
                 f"dependency {mod_id} has {key}={dependency.get(key)!r}, expected {value!r}")
 
 
-def verify_jar(jar_path: Path, project_root: Path) -> tuple[str, int]:
-    expected_name = f"{MOD_ID}-{MOD_VERSION}.jar"
+def verify_jar(
+        jar_path: Path,
+        project_root: Path,
+        mod_version: str) -> tuple[str, int]:
+    expected_name = f"{MOD_ID}-{mod_version}.jar"
     if jar_path.name != expected_name:
         raise VerificationError(
             f"universal JAR must be named {expected_name}, found {jar_path.name}")
@@ -124,7 +138,7 @@ def verify_jar(jar_path: Path, project_root: Path) -> tuple[str, int]:
             raise VerificationError("release must declare exactly one mod")
         expected_mod = {
             "modId": MOD_ID,
-            "version": MOD_VERSION,
+            "version": mod_version,
             "displayName": MOD_NAME,
             "authors": MOD_OWNER,
         }
@@ -144,7 +158,7 @@ def verify_jar(jar_path: Path, project_root: Path) -> tuple[str, int]:
         expected_manifest = {
             "Manifest-Version": "1.0",
             "Implementation-Title": MOD_NAME,
-            "Implementation-Version": MOD_VERSION,
+            "Implementation-Version": mod_version,
             "Implementation-Vendor": MOD_OWNER,
             "Built-For-Minecraft": MINECRAFT_VERSION,
         }
@@ -155,7 +169,15 @@ def verify_jar(jar_path: Path, project_root: Path) -> tuple[str, int]:
     return sha256(jar_bytes), len(jar_bytes)
 
 
-def verify_bundle(bundle_path: Path, jar_path: Path, project_root: Path) -> str:
+def verify_bundle(
+        bundle_path: Path,
+        jar_path: Path,
+        project_root: Path,
+        mod_version: str) -> str:
+    expected_bundle_name = f"{MOD_ID}-{mod_version}-release.zip"
+    if bundle_path.name != expected_bundle_name:
+        raise VerificationError(
+            f"release bundle must be named {expected_bundle_name}, found {bundle_path.name}")
     expected_names = {
         jar_path.name, "README.md", "LICENSE", "CHANGELOG.md", "SHA256SUMS",
     }
@@ -203,13 +225,15 @@ def parse_arguments() -> argparse.Namespace:
 def main() -> int:
     arguments = parse_arguments()
     try:
+        project_root = arguments.project_root.resolve()
+        mod_version = project_mod_version(project_root)
         jar_digest, jar_size = verify_jar(
-            arguments.jar.resolve(), arguments.project_root.resolve())
+            arguments.jar.resolve(), project_root, mod_version)
         print(f"verified universal JAR: sha256={jar_digest} bytes={jar_size}")
         if arguments.bundle:
             bundle_digest = verify_bundle(
                 arguments.bundle.resolve(), arguments.jar.resolve(),
-                arguments.project_root.resolve())
+                project_root, mod_version)
             print(f"verified release bundle: sha256={bundle_digest}")
     except (BadZipFile, OSError, VerificationError, tomllib.TOMLDecodeError) as exception:
         print(f"Release verification failed: {exception}", file=sys.stderr)

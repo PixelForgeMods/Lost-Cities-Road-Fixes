@@ -74,8 +74,11 @@ public final class InterchangeSelector {
         }
 
         int gradeRun = gradePlanner.minimumRunBlocks(site.lowerDeck(), site.upperDeck());
-        if (gradeRun > site.approachRunBlocks()) {
-            reasons.add("grade requires " + gradeRun + " approach blocks");
+        int turningRouteRun = InterchangeRouteMetrics.shortestTurningRouteRunBlocks(
+                design, site.approachRunBlocks());
+        if (gradeRun > turningRouteRun) {
+            reasons.add("turning-ramp grade requires " + gradeRun
+                    + " blocks but the shortest route provides " + turningRouteRun);
         }
 
         int separationHalfBlocks = site.upperDeck().halfBlocks() - site.lowerDeck().halfBlocks();
