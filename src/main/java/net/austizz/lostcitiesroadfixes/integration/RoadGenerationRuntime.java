@@ -21,11 +21,14 @@ import net.austizz.lostcitiesroadfixes.planning.continuity.RegionalRoadPlan;
 import net.austizz.lostcitiesroadfixes.planning.continuity.RoadAxis;
 import net.austizz.lostcitiesroadfixes.render.ElevatedRoadTile;
 import net.austizz.lostcitiesroadfixes.render.MinecraftRoadWriter;
+import net.austizz.lostcitiesroadfixes.render.RoadSupportPolicy;
 import net.austizz.lostcitiesroadfixes.road.ChunkPoint;
 import net.austizz.lostcitiesroadfixes.road.HalfBlockElevation;
 import net.austizz.lostcitiesroadfixes.road.PlanningGrid;
 import net.austizz.lostcitiesroadfixes.road.PlanningRegion;
 import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
+import net.austizz.lostcitiesroadfixes.theme.CompiledRoadTheme;
+import net.austizz.lostcitiesroadfixes.theme.RoadThemeResources;
 import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.world.level.chunk.ChunkAccess;
 
@@ -44,7 +47,6 @@ public final class RoadGenerationRuntime {
             new InterchangeGeometryPlanner(new InterchangeLayoutFactory(ROAD_STANDARD));
     private static final RuntimeRoadRenderPipeline RENDER_PIPELINE =
             new RuntimeRoadRenderPipeline();
-    private static final MinecraftRoadWriter WRITER = new MinecraftRoadWriter();
     private static final AtomicLong NATIVE_SUPPRESSIONS = new AtomicLong();
     private static final AtomicLong LATE_RENDER_INVOCATIONS = new AtomicLong();
     private static final AtomicLong INTERCHANGE_REGIONS_PLANNED = new AtomicLong();
@@ -113,11 +115,16 @@ public final class RoadGenerationRuntime {
             if (!interchanges.isEmpty()) {
                 INTERCHANGE_RENDER_INVOCATIONS.incrementAndGet();
             }
+            CompiledRoadTheme theme = RoadThemeResources.active();
+            MinecraftRoadWriter writer = new MinecraftRoadWriter(theme.palette());
+            RoadSupportPolicy supportPolicy = feature.profile.HIGHWAY_SUPPORTS
+                    ? RoadSupportPolicy.enabled(theme.maximumSupportDepthBlocks())
+                    : RoadSupportPolicy.disabled();
             RENDER_PIPELINE.render(
                     target,
                     roads,
                     interchanges,
-                    surface -> WRITER.write(chunk, surface));
+                    surface -> writer.write(chunk, surface, supportPolicy));
         } catch (RuntimeException exception) {
             throw new IllegalStateException(
                     "Failed to render replacement roads in dimension "

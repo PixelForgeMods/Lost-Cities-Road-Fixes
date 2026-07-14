@@ -6,11 +6,19 @@ import net.austizz.lostcitiesroadfixes.integration.RoadGenerationRuntime;
 import net.austizz.lostcitiesroadfixes.integration.RuntimeRoadRenderPipeline;
 import net.austizz.lostcitiesroadfixes.render.ChunkRoadSurface;
 import net.austizz.lostcitiesroadfixes.render.MinecraftRoadWriter;
+import net.austizz.lostcitiesroadfixes.render.MinecraftRoadPalette;
+import net.austizz.lostcitiesroadfixes.render.RoadSupportPolicy;
 import net.austizz.lostcitiesroadfixes.render.RoadSurfaceCell;
 import net.austizz.lostcitiesroadfixes.render.RoadSurfacePosition;
 import net.austizz.lostcitiesroadfixes.render.RoadSurfaceRole;
 import net.austizz.lostcitiesroadfixes.road.ChunkPoint;
 import net.austizz.lostcitiesroadfixes.road.HalfBlockElevation;
+import net.austizz.lostcitiesroadfixes.theme.CompiledRoadTheme;
+import net.austizz.lostcitiesroadfixes.theme.RoadTheme;
+import net.austizz.lostcitiesroadfixes.theme.RoadThemeCatalogue;
+import net.austizz.lostcitiesroadfixes.theme.RoadThemeCompiler;
+import net.austizz.lostcitiesroadfixes.theme.RoadThemeId;
+import net.austizz.lostcitiesroadfixes.theme.RoadThemeResources;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -21,6 +29,8 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 import java.util.List;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @GameTestHolder(LostCitiesRoadFixes.MOD_ID)
@@ -88,6 +98,123 @@ public final class RuntimeHookGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty3x3x3", timeoutTicks = 20)
+    public static void minecraftWriterUsesThemeAndHonorsTheSupportPolicy(GameTestHelper helper) {
+        BlockPos supported = new BlockPos(1, 2, 1);
+        BlockPos unsupported = new BlockPos(2, 2, 1);
+        BlockPos terrainStopped = new BlockPos(0, 2, 1);
+        helper.setBlock(supported.below(), Blocks.AIR);
+        helper.setBlock(supported.below(2), Blocks.WATER);
+        helper.setBlock(unsupported.below(), Blocks.AIR);
+        helper.setBlock(unsupported.below(2), Blocks.AIR);
+        helper.setBlock(terrainStopped.below(), Blocks.AIR);
+        helper.setBlock(terrainStopped.below(2), Blocks.STONE);
+
+        MinecraftRoadPalette palette = testPalette();
+        MinecraftRoadWriter writer = new MinecraftRoadWriter(palette);
+        writeCell(helper, writer, supported, HalfBlockElevation.ofWholeBlocks(
+                helper.absolutePos(supported).getY()), RoadSurfaceRole.ASPHALT,
+                RoadSupportPolicy.enabled(1));
+        writeCell(helper, writer, unsupported, HalfBlockElevation.ofWholeBlocks(
+                helper.absolutePos(unsupported).getY()), RoadSurfaceRole.ASPHALT,
+                RoadSupportPolicy.disabled());
+        writeCell(helper, writer, terrainStopped, HalfBlockElevation.ofWholeBlocks(
+                helper.absolutePos(terrainStopped).getY()), RoadSurfaceRole.ASPHALT,
+                RoadSupportPolicy.enabled(2));
+
+        helper.assertBlockPresent(Blocks.BLUE_CONCRETE, supported);
+        helper.assertBlockPresent(Blocks.IRON_BLOCK, supported.below());
+        helper.assertBlockPresent(Blocks.DEEPSLATE_BRICKS, supported.below(2));
+        helper.assertBlockPresent(Blocks.BLUE_CONCRETE, unsupported);
+        helper.assertBlockPresent(Blocks.IRON_BLOCK, unsupported.below());
+        helper.assertBlockPresent(Blocks.AIR, unsupported.below(2));
+        helper.assertBlockPresent(Blocks.IRON_BLOCK, terrainStopped.below());
+        helper.assertBlockPresent(Blocks.STONE, terrainStopped.below(2));
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty3x3x3", timeoutTicks = 20)
+    public static void roadThemeCompilerValidatesRegistryStatesAndSlabs(GameTestHelper helper) {
+        RoadTheme base = RoadThemeCatalogue.defaultTheme();
+        Map<RoadSurfaceRole, String> full = new EnumMap<>(base.fullBlocks());
+        Map<RoadSurfaceRole, String> slabs = new EnumMap<>(base.bottomSlabs());
+        full.put(RoadSurfaceRole.ASPHALT, "minecraft:blue_concrete");
+        slabs.put(
+                RoadSurfaceRole.ASPHALT,
+                "minecraft:oxidized_cut_copper_slab[type=bottom,waterlogged=false]");
+        RoadTheme valid = new RoadTheme(
+                RoadThemeId.parse("example:valid"),
+                full,
+                slabs,
+                "minecraft:iron_block",
+                "minecraft:deepslate_bricks",
+                40);
+
+        CompiledRoadTheme compiled = new RoadThemeCompiler().compile(valid);
+        if (!compiled.palette().fullBlock(RoadSurfaceRole.ASPHALT)
+                .is(Blocks.BLUE_CONCRETE)) {
+            helper.fail("Custom full-block theme state was not compiled");
+            return;
+        }
+        if (compiled.palette().bottomSlab(RoadSurfaceRole.ASPHALT)
+                .getValue(SlabBlock.TYPE) != SlabType.BOTTOM) {
+            helper.fail("Custom slab properties were not compiled");
+            return;
+        }
+
+        Map<RoadSurfaceRole, String> unknownBlocks = new EnumMap<>(full);
+        unknownBlocks.put(RoadSurfaceRole.ASPHALT, "missing:not_a_block");
+        assertThemeRejected(helper, new RoadTheme(
+                RoadThemeId.parse("example:unknown"),
+                unknownBlocks,
+                slabs,
+                valid.foundation(),
+                valid.support(),
+                40), "missing:not_a_block");
+
+        Map<RoadSurfaceRole, String> topSlabs = new EnumMap<>(slabs);
+        topSlabs.put(
+                RoadSurfaceRole.ASPHALT,
+                "minecraft:oxidized_cut_copper_slab[type=top,waterlogged=false]");
+        assertThemeRejected(helper, new RoadTheme(
+                RoadThemeId.parse("example:top_slab"),
+                full,
+                topSlabs,
+                valid.foundation(),
+                valid.support(),
+                40), "bottom slab");
+
+        assertThemeRejected(helper, new RoadTheme(
+                RoadThemeId.parse("example:air_support"),
+                full,
+                slabs,
+                valid.foundation(),
+                "minecraft:air",
+                40), "solid block");
+
+        CompiledRoadTheme before = RoadThemeResources.active();
+        Map<RoadSurfaceRole, String> invalidDefaultBlocks = new EnumMap<>(full);
+        invalidDefaultBlocks.put(RoadSurfaceRole.ASPHALT, "missing:not_a_block");
+        RoadTheme invalidDefault = new RoadTheme(
+                RoadThemeCatalogue.DEFAULT_ID,
+                invalidDefaultBlocks,
+                slabs,
+                valid.foundation(),
+                valid.support(),
+                40);
+        try {
+            RoadThemeResources.install(Map.of(RoadThemeCatalogue.DEFAULT_ID, invalidDefault));
+            helper.fail("Invalid theme reload should have failed atomically");
+            return;
+        } catch (IllegalArgumentException expected) {
+            if (RoadThemeResources.active() != before) {
+                helper.fail("Invalid theme reload replaced the active compiled snapshot");
+                return;
+            }
+        }
+        helper.succeed();
+    }
+
     private static void writeCell(
             GameTestHelper helper,
             MinecraftRoadWriter writer,
@@ -99,5 +226,51 @@ public final class RuntimeHookGameTests {
         ChunkRoadSurface surface = new ChunkRoadSurface(chunkPoint, List.of(new RoadSurfaceCell(
                 new RoadSurfacePosition(absolute.getX(), absolute.getZ(), elevation), role)));
         writer.write(helper.getLevel().getChunkAt(absolute), surface);
+    }
+
+    private static void writeCell(
+            GameTestHelper helper,
+            MinecraftRoadWriter writer,
+            BlockPos relative,
+            HalfBlockElevation elevation,
+            RoadSurfaceRole role,
+            RoadSupportPolicy supportPolicy) {
+        BlockPos absolute = helper.absolutePos(relative);
+        ChunkPoint chunkPoint = new ChunkPoint(absolute.getX() >> 4, absolute.getZ() >> 4);
+        ChunkRoadSurface surface = new ChunkRoadSurface(chunkPoint, List.of(new RoadSurfaceCell(
+                new RoadSurfacePosition(absolute.getX(), absolute.getZ(), elevation), role)));
+        writer.write(helper.getLevel().getChunkAt(absolute), surface, supportPolicy);
+    }
+
+    private static MinecraftRoadPalette testPalette() {
+        Map<RoadSurfaceRole, net.minecraft.world.level.block.state.BlockState> full =
+                new EnumMap<>(RoadSurfaceRole.class);
+        Map<RoadSurfaceRole, net.minecraft.world.level.block.state.BlockState> slabs =
+                new EnumMap<>(RoadSurfaceRole.class);
+        for (RoadSurfaceRole role : RoadSurfaceRole.values()) {
+            full.put(role, Blocks.BLUE_CONCRETE.defaultBlockState());
+            slabs.put(role, Blocks.SMOOTH_STONE_SLAB.defaultBlockState()
+                    .setValue(SlabBlock.TYPE, SlabType.BOTTOM));
+        }
+        return new MinecraftRoadPalette(
+                full,
+                slabs,
+                Blocks.IRON_BLOCK.defaultBlockState(),
+                Blocks.DEEPSLATE_BRICKS.defaultBlockState());
+    }
+
+    private static void assertThemeRejected(
+            GameTestHelper helper,
+            RoadTheme theme,
+            String expectedMessage) {
+        try {
+            new RoadThemeCompiler().compile(theme);
+            helper.fail("Road theme " + theme.id() + " should have been rejected");
+        } catch (IllegalArgumentException exception) {
+            if (!exception.getMessage().contains(theme.id().toString())
+                    || !exception.getMessage().contains(expectedMessage)) {
+                helper.fail("Unexpected road-theme diagnostic: " + exception.getMessage());
+            }
+        }
     }
 }
