@@ -60,7 +60,7 @@ class InterchangeSelectorTest {
                 4,
                 159,
                 new HalfBlockElevation(140),
-                new HalfBlockElevation(160),
+                new HalfBlockElevation(200),
                 TrafficDemand.HIGH,
                 4,
                 true,
@@ -72,7 +72,7 @@ class InterchangeSelectorTest {
         assertTrue(decision.selected().isEmpty());
         assertTrue(decision.evaluations().stream()
                 .flatMap(evaluation -> evaluation.rejectionReasons().stream())
-                .anyMatch(reason -> reason.contains("grade requires 160")));
+                .anyMatch(reason -> reason.contains("turning-ramp grade requires 480")));
     }
 
     @Test

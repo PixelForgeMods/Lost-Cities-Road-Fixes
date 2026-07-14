@@ -1,12 +1,15 @@
 package net.austizz.lostcitiesroadfixes.interchange.layout;
 
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeDesign;
+import net.austizz.lostcitiesroadfixes.interchange.InterchangeRouteMetrics;
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeType;
 import net.austizz.lostcitiesroadfixes.interchange.JunctionForm;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.RampCenterline;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.RampElevationKeyframe;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.RampPathBuilder;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.RampRoute;
+import net.austizz.lostcitiesroadfixes.planning.elevation.GradeProfilePlanner;
+import net.austizz.lostcitiesroadfixes.road.HalfBlockElevation;
 import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
 
 import java.util.ArrayList;
@@ -19,7 +22,6 @@ import java.util.Set;
 
 public final class InterchangeLayoutFactory {
     private static final int RAMP_WIDTH_BLOCKS = 8;
-    private static final double LANE_OFFSET_BLOCKS = 8.0;
     private static final List<ApproachDirection> CLOCKWISE_APPROACHES = List.of(
             ApproachDirection.WEST,
             ApproachDirection.NORTH,
@@ -27,9 +29,11 @@ public final class InterchangeLayoutFactory {
             ApproachDirection.SOUTH);
 
     private final RoadDesignStandard standard;
+    private final GradeProfilePlanner gradePlanner;
 
     public InterchangeLayoutFactory(RoadDesignStandard standard) {
         this.standard = Objects.requireNonNull(standard, "standard");
+        this.gradePlanner = new GradeProfilePlanner(standard);
     }
 
     public InterchangeLayout create(
@@ -173,20 +177,24 @@ public final class InterchangeLayoutFactory {
             InterchangeGeometrySite site,
             InterchangeMovement movement,
             int widthBlocks) {
-        double radius = design.minimumRadiusBlocks();
-        double tangent = site.approachRunBlocks() - radius;
+        double tangent = InterchangeRouteMetrics.directTangentBlocks(
+                design, site.approachRunBlocks());
+        double radius = InterchangeRouteMetrics.directRadiusBlocks(
+                design, movement.kind());
         InterchangePort start = site.port(movement.from(), TrafficFlow.INBOUND);
         InterchangePort end = site.port(movement.to(), TrafficFlow.OUTBOUND);
         RampPathBuilder builder = new RampPathBuilder(standard, start.point(), start.heading())
                 .straight(tangent);
         if (movement.kind() == MovementKind.RIGHT) {
-            builder.turnRight(radius - LANE_OFFSET_BLOCKS, 90.0);
+            builder.turnRight(radius, 90.0);
         } else {
-            builder.turnLeft(radius + LANE_OFFSET_BLOCKS, 90.0);
+            builder.turnLeft(radius, 90.0);
         }
-        RampCenterline centerline = builder
-                .straight(tangent)
-                .build(start.elevation(), end.elevation());
+        RampCenterline centerline = turningCenterline(
+                builder.straight(tangent),
+                start.elevation(),
+                end.elevation(),
+                tangent);
         requireEndpoint(design, movement, end, centerline);
         return new RampRoute(centerline, widthBlocks);
     }
@@ -196,17 +204,45 @@ public final class InterchangeLayoutFactory {
             InterchangeGeometrySite site,
             InterchangeMovement movement,
             int widthBlocks) {
-        double loopRadius = (design.minimumRadiusBlocks() - LANE_OFFSET_BLOCKS) / 2.0;
-        double tangent = site.approachRunBlocks() + LANE_OFFSET_BLOCKS + loopRadius;
+        double loopRadius = InterchangeRouteMetrics.loopRadiusBlocks(design);
+        double tangent = InterchangeRouteMetrics.loopTangentBlocks(
+                design, site.approachRunBlocks());
         InterchangePort start = site.port(movement.from(), TrafficFlow.INBOUND);
         InterchangePort end = site.port(movement.to(), TrafficFlow.OUTBOUND);
-        RampCenterline centerline = new RampPathBuilder(standard, start.point(), start.heading())
+        RampPathBuilder builder = new RampPathBuilder(standard, start.point(), start.heading())
                 .straight(tangent)
                 .turnRight(loopRadius, 270.0)
-                .straight(tangent)
-                .build(start.elevation(), end.elevation());
+                .straight(tangent);
+        RampCenterline centerline = turningCenterline(
+                builder,
+                start.elevation(),
+                end.elevation(),
+                tangent);
         requireEndpoint(design, movement, end, centerline);
         return new RampRoute(centerline, widthBlocks);
+    }
+
+    private RampCenterline turningCenterline(
+            RampPathBuilder builder,
+            HalfBlockElevation start,
+            HalfBlockElevation end,
+            double finalMergeTangentBlocks) {
+        if (start.equals(end)) {
+            return builder.build(start, end);
+        }
+        int gradeRun = gradePlanner.minimumRunBlocks(start, end);
+        double preMergeRun = builder.lengthBlocks() - finalMergeTangentBlocks;
+        if (gradeRun > preMergeRun + 1.0e-9) {
+            throw new IllegalArgumentException(
+                    "Turning ramp grade requires " + gradeRun
+                            + " blocks before its merge but only "
+                            + String.format(java.util.Locale.ROOT, "%.3f", preMergeRun)
+                            + " are available");
+        }
+        return builder.build(List.of(
+                new RampElevationKeyframe(0.0, start),
+                new RampElevationKeyframe(gradeRun, end),
+                new RampElevationKeyframe(builder.lengthBlocks(), end)));
     }
 
     private static InterchangeMovement rotate(

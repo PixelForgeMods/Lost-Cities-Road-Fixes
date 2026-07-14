@@ -2,6 +2,22 @@
 
 All notable changes to Lost Cities: Road Fixes are documented here.
 
+## 1.0.1+mc1.21.1 — 2026-07-15
+
+### Fixed
+
+- Selects interchanges for non-adjacent Lost Cities highway levels when the
+  compiled turning route—not merely the straight approach—has enough length for
+  the required vehicle-safe grade.
+- Makes converging ramps reach their destination deck before the shared merge
+  tangent, preventing independently interpolated routes from meeting at
+  different elevations.
+- Carves a ramp lane through arterial cells inside the seven-block clearance
+  envelope, preventing an upper deck foundation from overwriting the final ramp
+  slab.
+- Adds a saved-world connectivity checker and regression coverage for the
+  reported level-0/level-3 crossing at chunk `(-80, 104)`.
+
 ## 1.0.0+mc1.21.1 — 2026-07-15
 
 Initial NeoForge 1.21.1 release.

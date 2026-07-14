@@ -15,6 +15,7 @@ import net.austizz.lostcitiesroadfixes.interchange.planning.PlannedInterchange;
 import net.austizz.lostcitiesroadfixes.planning.continuity.RoadAxis;
 import net.austizz.lostcitiesroadfixes.render.ChunkRoadSurface;
 import net.austizz.lostcitiesroadfixes.render.ElevatedRoadTile;
+import net.austizz.lostcitiesroadfixes.render.MinecraftRoadWriter;
 import net.austizz.lostcitiesroadfixes.render.RoadSurfaceCell;
 import net.austizz.lostcitiesroadfixes.render.RoadSurfacePosition;
 import net.austizz.lostcitiesroadfixes.render.RoadSurfaceRole;
@@ -25,7 +26,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -85,6 +88,25 @@ class InterchangeSurfaceRasterizerTest {
         assertTrue(beforeEndpoint.cellAt(8, 255, elevation(153)).isPresent()
                 || beforeEndpoint.cellAt(8, 255, elevation(152)).isPresent());
         assertTrue(endpoint.cellAt(8, 264, elevation(152)).isPresent());
+    }
+
+    @Test
+    void clearsConflictingDeckCellsFromReportedEighteenBlockRampMerge() {
+        PlannedInterchangeGeometry geometry = geometryPlanner.create(selected(
+                elevation(140), elevation(176), elevation(140), elevation(176)));
+        ChunkRoadSurface merge = rasterizer.rasterize(
+                new ChunkPoint(0, 15), List.of(geometry));
+
+        Map<String, List<RoadSurfaceCell>> byColumn = merge.cells().stream()
+                .collect(Collectors.groupingBy(cell ->
+                        cell.position().x() + "," + cell.position().z()));
+        List<String> conflicts = byColumn.entrySet().stream()
+                .filter(entry -> hasVerticalConflict(entry.getValue()))
+                .map(Map.Entry::getKey)
+                .sorted()
+                .toList();
+
+        assertTrue(conflicts.isEmpty(), () -> "vertically conflicting road columns: " + conflicts);
     }
 
     @Test
@@ -184,6 +206,46 @@ class InterchangeSurfaceRasterizerTest {
         InterchangeDecision decision = InterchangeSelector.withBuiltIns()
                 .select(crossing.selectionSite());
         return new PlannedInterchange(crossing, decision);
+    }
+
+    private static PlannedInterchange selected(
+            HalfBlockElevation nativeX,
+            HalfBlockElevation nativeZ,
+            HalfBlockElevation plannedX,
+            HalfBlockElevation plannedZ) {
+        DetectedRoadCrossing crossing = new DetectedRoadCrossing(
+                new ChunkPoint(0, 0),
+                JunctionForm.FOUR_WAY,
+                0,
+                3,
+                EnumSet.allOf(ApproachDirection.class),
+                256,
+                128,
+                4,
+                TrafficDemand.HIGH,
+                4,
+                true,
+                true,
+                new CrossingDecks(nativeX, nativeZ, plannedX, plannedZ),
+                0x5eedL);
+        InterchangeDecision decision = InterchangeSelector.withBuiltIns()
+                .select(crossing.selectionSite());
+        return new PlannedInterchange(crossing, decision);
+    }
+
+    private static boolean hasVerticalConflict(List<RoadSurfaceCell> column) {
+        int clearanceHalfBlocks = MinecraftRoadWriter.HEADROOM_BLOCKS * 2;
+        for (int left = 0; left < column.size(); left++) {
+            for (int right = left + 1; right < column.size(); right++) {
+                int delta = StrictMath.abs(
+                        column.get(left).position().elevation().halfBlocks()
+                                - column.get(right).position().elevation().halfBlocks());
+                if (delta <= clearanceHalfBlocks) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static ElevatedRoadTile tile(ChunkPoint chunk, RoadAxis axis, int halfBlocks) {

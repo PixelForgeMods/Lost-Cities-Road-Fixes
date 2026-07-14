@@ -89,13 +89,15 @@ class RoadCrossingPlannerTest {
     @Test
     void selectsTheBestFeasibleDesignAndRetainsShortGradeRejections() {
         Map<RoadTileKey, RoadTile> roads = crossing(new ChunkPoint(0, 0), 16, 0, 1, false);
+        Map<RoadTileKey, RoadTile> steepRoads = crossing(
+                new ChunkPoint(0, 0), 16, 0, 3, false);
         RoadPlanKey key = keyFor(new ChunkPoint(0, 0));
         ChunkBounds crossingOnly = new ChunkBounds(0, 0, 0, 0);
 
         RegionalInterchangePlan feasible = planner(256).plan(
                 key, crossingOnly, lookup(roads), ELEVATIONS);
-        RegionalInterchangePlan tooShort = planner(159).plan(
-                key, crossingOnly, lookup(roads), ELEVATIONS);
+        RegionalInterchangePlan tooShort = planner(128).plan(
+                key, crossingOnly, lookup(steepRoads), ELEVATIONS);
 
         assertEquals(1, feasible.interchanges().size());
         assertEquals(InterchangeType.CLOVERLEAF,
@@ -105,7 +107,25 @@ class RoadCrossingPlannerTest {
         assertTrue(tooShort.interchanges().isEmpty());
         assertEquals(1, tooShort.rejectedCrossings().size());
         assertTrue(tooShort.rejectedCrossings().getFirst().decision().diagnostic()
-                .contains("grade requires 160"));
+                .contains("turning-ramp grade requires 288"));
+    }
+
+    @Test
+    void selectsDriveableInterchangeForReportedEighteenBlockCrossing() {
+        Map<RoadTileKey, RoadTile> roads = crossing(new ChunkPoint(0, 0), 16, 0, 3, false);
+        RoadPlanKey key = keyFor(new ChunkPoint(0, 0));
+        ChunkBounds crossingOnly = new ChunkBounds(0, 0, 0, 0);
+
+        RegionalInterchangePlan plan = planner(256).plan(
+                key, crossingOnly, lookup(roads), ELEVATIONS);
+
+        assertEquals(1, plan.interchanges().size(), () ->
+                plan.rejectedCrossings().isEmpty()
+                        ? plan.conflictedCrossings().toString()
+                        : plan.rejectedCrossings().getFirst().decision().diagnostic());
+        assertEquals(InterchangeType.CLOVERLEAF,
+                plan.interchanges().getFirst().decision().selected().orElseThrow().type());
+        assertTrue(plan.rejectedCrossings().isEmpty());
     }
 
     @Test

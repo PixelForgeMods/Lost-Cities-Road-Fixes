@@ -35,18 +35,25 @@ jobs:
         run: |
           ./gradlew test runGameTestServer build --stacktrace
 
+      - name: Read mod version
+        id: mod
+        run: |
+          mod_version="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          test -n "$mod_version"
+          echo "version=$mod_version" >> "$GITHUB_OUTPUT"
+
       - name: Package release candidate
         run: |
           ./gradlew releaseBundle --stacktrace
           python3 scripts/verify_release_artifact.py \
-            build/libs/lostcitiesroadfixes-1.0.0+mc1.21.1.jar \
-            --bundle build/distributions/lostcitiesroadfixes-1.0.0+mc1.21.1-release.zip
+            build/libs/lostcitiesroadfixes-${{ steps.mod.outputs.version }}.jar \
+            --bundle build/distributions/lostcitiesroadfixes-${{ steps.mod.outputs.version }}-release.zip
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: lostcitiesroadfixes
           path: |
-            build/libs/lostcitiesroadfixes-1.0.0+mc1.21.1.jar
-            build/distributions/lostcitiesroadfixes-1.0.0+mc1.21.1-release.zip
+            build/libs/lostcitiesroadfixes-${{ steps.mod.outputs.version }}.jar
+            build/distributions/lostcitiesroadfixes-${{ steps.mod.outputs.version }}-release.zip
           if-no-files-found: error
