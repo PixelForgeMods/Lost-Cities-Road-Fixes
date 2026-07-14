@@ -129,6 +129,7 @@ configurations {
 
 dependencyLocking {
     lockAllConfigurations()
+    ignoredDependencies.add('io.netty:netty-transport-native-epoll')
 }
 
 dependencies {
