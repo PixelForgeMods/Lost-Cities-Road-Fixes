@@ -1,8 +1,50 @@
+import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.OutputFile
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
+
+import java.security.MessageDigest
+import java.util.HexFormat
+
 plugins {
     id 'java-library'
     id 'maven-publish'
     id 'net.neoforged.moddev' version '2.0.141'
     id 'idea'
+}
+
+abstract class GenerateReleaseChecksums extends DefaultTask {
+    @InputFiles
+    @PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract ConfigurableFileCollection getReleaseFiles()
+
+    @OutputFile
+    abstract RegularFileProperty getChecksumFile()
+
+    @TaskAction
+    void generateChecksums() {
+        File output = checksumFile.get().asFile
+        output.parentFile.mkdirs()
+        output.withWriter('UTF-8') { writer ->
+            releaseFiles.files.sort { left, right -> left.name <=> right.name }.each { file ->
+                MessageDigest digest = MessageDigest.getInstance('SHA-256')
+                file.withInputStream { stream ->
+                    byte[] buffer = new byte[8192]
+                    int count
+                    while ((count = stream.read(buffer)) != -1) {
+                        digest.update(buffer, 0, count)
+                    }
+                }
+                writer.write(HexFormat.of().formatHex(digest.digest()))
+                writer.write('  ')
+                writer.write(file.name)
+                writer.write('\n')
+            }
+        }
+    }
 }
 
 tasks.named('wrapper', Wrapper).configure {
@@ -165,6 +207,52 @@ dependencies {
 
 tasks.named('test', Test).configure {
     useJUnitPlatform()
+}
+
+def releaseModId = mod_id.toString()
+def releaseModName = mod_name.toString()
+def releaseModVersion = mod_version.toString()
+def releaseMinecraftVersion = minecraft_version.toString()
+def releaseOwner = 'Austizz_tds'
+
+tasks.named('jar', Jar).configure {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+    from(rootProject.file('LICENSE')) {
+        into 'META-INF'
+        rename { "LICENSE_${releaseModId}" }
+    }
+    manifest {
+        attributes(
+                'Implementation-Title': releaseModName,
+                'Implementation-Version': releaseModVersion,
+                'Implementation-Vendor': releaseOwner,
+                'Built-For-Minecraft': releaseMinecraftVersion)
+    }
+}
+
+def universalJar = tasks.named('jar', Jar)
+def releaseDocuments = files('README.md', 'LICENSE', 'CHANGELOG.md')
+def releaseChecksums = tasks.register('generateReleaseChecksums', GenerateReleaseChecksums) {
+    group = 'build'
+    description = 'Generates SHA-256 checksums for release files.'
+    dependsOn universalJar
+    releaseFiles.from(universalJar.flatMap { it.archiveFile })
+    releaseFiles.from(releaseDocuments)
+    checksumFile.set(layout.buildDirectory.file('release/SHA256SUMS'))
+}
+
+tasks.register('releaseBundle', Zip) {
+    group = 'build'
+    description = 'Builds the verified client handoff bundle.'
+    dependsOn releaseChecksums
+    archiveFileName.set("${releaseModId}-${releaseModVersion}-release.zip")
+    destinationDirectory.set(layout.buildDirectory.dir('distributions'))
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+    from(universalJar.flatMap { it.archiveFile })
+    from(releaseDocuments)
+    from(releaseChecksums.flatMap { it.checksumFile })
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

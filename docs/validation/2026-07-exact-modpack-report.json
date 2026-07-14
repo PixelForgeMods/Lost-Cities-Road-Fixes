@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "validated_local": "2026-07-15T00:10:32+02:00",
+  "validated_local": "2026-07-15T00:23:15+02:00",
   "result": "pass",
   "story": "US-21",
   "issue": "https://github.com/PixelForgeMods/Lost-Cities-Road-Fixes/issues/45",
@@ -12,7 +12,7 @@
     "lost_cities_sha256": "26db73013028ad724af030aa30cbd8dd62da8b951645b8d02f066c8af083a52f",
     "client_jar_count": 173,
     "runtime_jar_count_with_addon": 174,
-    "runtime_jar_manifest_sha256": "ae6b748c0d05c645604ce89404112ff4f2e927642535b11e451c25a4503c7400",
+    "runtime_jar_manifest_sha256": "0e3951c53f580b2e2f2e370fde17995f39cab018654cbcd613bab7a369851af3",
     "instance_config_count": 315,
     "instance_config_manifest_sha256": "e9fec65be246c807fbe4bac020e18b52c45c98071033b4f0bcbbf63aea278f0e",
     "world_serverconfig_count": 5,
@@ -20,8 +20,14 @@
   },
   "production_jar": {
     "name": "lostcitiesroadfixes-1.0.0+mc1.21.1.jar",
-    "size": 282818,
-    "sha256": "1ed5d4eedfa2ab36f91866d7d6c2c8d404d15513c9fc230b36e39bff4576867e"
+    "size": 283697,
+    "sha256": "170fd00218f8cc88faa305b8a63ae64ad99767fc0a6694b4c11745b0aa40751b",
+    "embedded_license": "META-INF/LICENSE_lostcitiesroadfixes"
+  },
+  "release_bundle": {
+    "name": "lostcitiesroadfixes-1.0.0+mc1.21.1-release.zip",
+    "sha256": "4869cf2f3338d691d8c13b565892e45a49a0a6226278407db0bec752200b40ac",
+    "two_clean_builds_identical": true
   },
   "profile": {
     "base": "default",
@@ -59,19 +65,19 @@
     "player_joined_at_reported_location": true,
     "all_dimensions_saved": true,
     "startup_ms": {
-      "modlauncher_to_compatibility_probe": 6079,
-      "modlauncher_to_player_login": 66944
+      "modlauncher_to_compatibility_probe": 9081,
+      "modlauncher_to_player_login": 63094
     },
     "start_region_generation_ms": {
       "exact_pack_without_addon": 5216,
-      "exact_pack_with_production_addon": 6857,
-      "observed_delta_ms": 1641,
-      "observed_delta_percent": 31.46,
+      "exact_pack_with_production_addon": 6060,
+      "observed_delta_ms": 844,
+      "observed_delta_percent": 16.18,
       "sample_count_per_variant": 1
     },
     "shutdown_diagnostics": {
-      "native_suppressions": 580,
-      "late_render_invocations": 1135,
+      "native_suppressions": 546,
+      "late_render_invocations": 1042,
       "interchange_regions_planned": 8,
       "selected_interchanges": 1,
       "rejected_crossings": 1,
@@ -100,9 +106,9 @@
     "site_chunk": [-112, -192]
   },
   "evidence_sha256": {
-    "exact_pack_final_run.log": "753ab8b1c8ed41929b43dd716087c5d66691ed09d8f6855d876209d5ecd601dc",
+    "exact_pack_release_run.log": "e884c7ba221f4ae91918e9ae50b1c5bcaca24376d0c951f59cc4544f43a2e5a7",
     "exact_pack_baseline_no_addon.log": "0b88145675ae440e9637608820b7bc98f9c070e0c1096e6dd9d2a621e8d9b3ed",
-    "final_reported_gap_region.json": "8cc4e7eb6b0f4ed21b22a6384e7df3164ed4356a2d201092b4e369b251434fde",
+    "release_reported_gap_region.json": "d5c1734cd0c005d06b4adb898a884b7fe368371ec19f886a5b759ec22a23ba4c",
     "baseline_native_road_region.json": "256764af46f721ad475c256c9c50299b09c9a947bba6a00ac3b05aeee592e2b4"
   },
   "notes": [
