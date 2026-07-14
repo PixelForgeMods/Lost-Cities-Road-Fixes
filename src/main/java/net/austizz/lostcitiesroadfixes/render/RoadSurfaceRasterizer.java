@@ -46,7 +46,7 @@ public final class RoadSurfaceRasterizer {
                     continue;
                 }
                 int longitudinal = road.axis() == RoadAxis.X ? x : z;
-                RoadSurfaceRole role = roleAt(crossIndex, longitudinal);
+                RoadSurfaceRole role = arterialRoleAt(crossIndex, longitudinal);
                 RoadSurfacePosition position = new RoadSurfacePosition(x, z, road.elevation());
                 coverage.computeIfAbsent(position, ignored -> new Coverage()).add(road.axis(), role);
             }
@@ -66,7 +66,10 @@ public final class RoadSurfaceRasterizer {
         return crossCoordinate - (roadCrossChunk * 16 - CROSS_SECTION_OFFSET);
     }
 
-    private static RoadSurfaceRole roleAt(int crossIndex, int longitudinal) {
+    public static RoadSurfaceRole arterialRoleAt(int crossIndex, int longitudinal) {
+        if (crossIndex < 0 || crossIndex >= CROSS_SECTION_WIDTH) {
+            throw new IllegalArgumentException("Arterial cross index must be between 0 and 31");
+        }
         if (crossIndex == 0 || crossIndex == 31) {
             return RoadSurfaceRole.SHOULDER;
         }

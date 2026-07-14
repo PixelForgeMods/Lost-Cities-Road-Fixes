@@ -4,6 +4,7 @@ import net.austizz.lostcitiesroadfixes.interchange.InterchangeDesign;
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeType;
 import net.austizz.lostcitiesroadfixes.interchange.JunctionForm;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.RampCenterline;
+import net.austizz.lostcitiesroadfixes.interchange.geometry.RampElevationKeyframe;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.RampPathBuilder;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.RampRoute;
 import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
@@ -35,7 +36,16 @@ public final class InterchangeLayoutFactory {
             InterchangeDesign design,
             InterchangeGeometrySite site) {
         Objects.requireNonNull(design, "design");
+        return create(design, site, defaultApproaches(design.form()));
+    }
+
+    public InterchangeLayout create(
+            InterchangeDesign design,
+            InterchangeGeometrySite site,
+            Set<ApproachDirection> approaches) {
+        Objects.requireNonNull(design, "design");
         Objects.requireNonNull(site, "site");
+        Objects.requireNonNull(approaches, "approaches");
         if (site.approachRunBlocks() < design.minimumApproachRunBlocks()) {
             throw new IllegalArgumentException(
                     design.id() + " requires " + design.minimumApproachRunBlocks()
@@ -46,18 +56,26 @@ public final class InterchangeLayoutFactory {
                     "Approach run must extend beyond the interchange radius for " + design.id());
         }
 
-        Set<ApproachDirection> approaches = design.form() == JunctionForm.THREE_WAY
-                ? EnumSet.of(ApproachDirection.WEST, ApproachDirection.EAST, ApproachDirection.SOUTH)
-                : EnumSet.allOf(ApproachDirection.class);
-        List<ConnectionDraft> drafts = createDrafts(design, site, approaches);
+        Set<ApproachDirection> surveyedApproaches = EnumSet.copyOf(approaches);
+        int expectedApproaches = design.form() == JunctionForm.THREE_WAY ? 3 : 4;
+        if (surveyedApproaches.size() != expectedApproaches) {
+            throw new IllegalArgumentException(
+                    design.form() + " layout requires " + expectedApproaches + " approaches");
+        }
+        ApproachDirection missingApproach = design.form() == JunctionForm.THREE_WAY
+                ? EnumSet.complementOf(EnumSet.copyOf(surveyedApproaches)).iterator().next()
+                : null;
+        List<ConnectionDraft> drafts = createDrafts(
+                design, site, surveyedApproaches, missingApproach);
         List<InterchangeConnection> connections = finishConnections(design, drafts);
-        return new InterchangeLayout(design, site, approaches, connections);
+        return new InterchangeLayout(design, site, surveyedApproaches, connections);
     }
 
     private List<ConnectionDraft> createDrafts(
             InterchangeDesign design,
             InterchangeGeometrySite site,
-            Set<ApproachDirection> approaches) {
+            Set<ApproachDirection> approaches,
+            ApproachDirection missingApproach) {
         List<ConnectionDraft> result = new ArrayList<>();
         for (ApproachDirection from : CLOCKWISE_APPROACHES) {
             if (!approaches.contains(from) || !approaches.contains(from.opposite())) {
@@ -74,8 +92,8 @@ public final class InterchangeLayoutFactory {
             if (!approaches.contains(from)) {
                 continue;
             }
-            addTurn(result, design, site, approaches, from, MovementKind.RIGHT);
-            addTurn(result, design, site, approaches, from, MovementKind.LEFT);
+            addTurn(result, design, site, approaches, missingApproach, from, MovementKind.RIGHT);
+            addTurn(result, design, site, approaches, missingApproach, from, MovementKind.LEFT);
         }
         return result;
     }
@@ -85,6 +103,7 @@ public final class InterchangeLayoutFactory {
             InterchangeDesign design,
             InterchangeGeometrySite site,
             Set<ApproachDirection> approaches,
+            ApproachDirection missingApproach,
             ApproachDirection from,
             MovementKind kind) {
         ApproachDirection destination = kind == MovementKind.RIGHT
@@ -94,7 +113,8 @@ public final class InterchangeLayoutFactory {
             return;
         }
         InterchangeMovement movement = new InterchangeMovement(from, destination, kind);
-        boolean loop = kind == MovementKind.LEFT && usesLoop(design.type(), from);
+        boolean loop = kind == MovementKind.LEFT
+                && usesLoop(design.type(), canonicalDirection(from, missingApproach));
         result.add(new ConnectionDraft(
                 movement,
                 loop ? loopTurn(design, site, movement) : directTurn(design, site, movement),
@@ -104,9 +124,14 @@ public final class InterchangeLayoutFactory {
     private RampRoute mainline(InterchangeGeometrySite site, InterchangeMovement movement) {
         InterchangePort start = site.port(movement.from(), TrafficFlow.INBOUND);
         InterchangePort end = site.port(movement.to(), TrafficFlow.OUTBOUND);
-        RampCenterline centerline = new RampPathBuilder(standard, start.point(), start.heading())
-                .straight(site.approachRunBlocks() * 2.0)
-                .build(start.elevation(), end.elevation());
+        RampPathBuilder builder = new RampPathBuilder(standard, start.point(), start.heading())
+                .straight(site.approachRunBlocks() * 2.0);
+        RampCenterline centerline = builder.build(List.of(
+                new RampElevationKeyframe(0.0, start.elevation()),
+                new RampElevationKeyframe(
+                        site.approachRunBlocks(),
+                        site.centerElevation(movement.from())),
+                new RampElevationKeyframe(builder.lengthBlocks(), end.elevation())));
         return new RampRoute(centerline, RAMP_WIDTH_BLOCKS);
     }
 
@@ -212,6 +237,26 @@ public final class InterchangeLayoutFactory {
             case CLOVERLEAF -> true;
             default -> false;
         };
+    }
+
+    private static ApproachDirection canonicalDirection(
+            ApproachDirection direction,
+            ApproachDirection missingApproach) {
+        if (missingApproach == null) {
+            return direction;
+        }
+        ApproachDirection[] directions = ApproachDirection.values();
+        return directions[Math.floorMod(
+                direction.ordinal() - missingApproach.ordinal(), directions.length)];
+    }
+
+    private static Set<ApproachDirection> defaultApproaches(JunctionForm form) {
+        return form == JunctionForm.THREE_WAY
+                ? EnumSet.of(
+                        ApproachDirection.WEST,
+                        ApproachDirection.EAST,
+                        ApproachDirection.SOUTH)
+                : EnumSet.allOf(ApproachDirection.class);
     }
 
     private static void requireEndpoint(
