@@ -65,10 +65,38 @@ public final class InterchangeLayoutFactory {
         ApproachDirection missingApproach = design.form() == JunctionForm.THREE_WAY
                 ? EnumSet.complementOf(EnumSet.copyOf(surveyedApproaches)).iterator().next()
                 : null;
-        List<ConnectionDraft> drafts = createDrafts(
-                design, site, surveyedApproaches, missingApproach);
-        List<InterchangeConnection> connections = finishConnections(design, drafts);
+        List<InterchangeConnection> connections = design.geometry()
+                .map(geometry -> createBlueprintConnections(
+                        design, site, missingApproach, geometry))
+                .orElseGet(() -> finishConnections(design, createDrafts(
+                        design, site, surveyedApproaches, missingApproach)));
         return new InterchangeLayout(design, site, surveyedApproaches, connections);
+    }
+
+    private List<InterchangeConnection> createBlueprintConnections(
+            InterchangeDesign design,
+            InterchangeGeometrySite site,
+            ApproachDirection missingApproach,
+            InterchangeGeometryBlueprint geometry) {
+        List<InterchangeConnection> result = new ArrayList<>(geometry.movements().size());
+        for (InterchangeMovementBlueprint blueprint : geometry.movements()) {
+            InterchangeMovement movement = rotate(
+                    blueprint.movement(), missingApproach);
+            RampRoute route = switch (blueprint.form()) {
+                case MAINLINE -> mainline(site, movement, blueprint.widthBlocks());
+                case DIRECT -> directTurn(
+                        design, site, movement, blueprint.widthBlocks());
+                case LOOP -> loopTurn(
+                        design, site, movement, blueprint.widthBlocks());
+            };
+            result.add(new InterchangeConnection(
+                    movement,
+                    route,
+                    blueprint.form(),
+                    blueprint.control(),
+                    blueprint.structureLevel()));
+        }
+        return List.copyOf(result);
     }
 
     private List<ConnectionDraft> createDrafts(
@@ -85,7 +113,7 @@ public final class InterchangeLayoutFactory {
                     from, from.opposite(), MovementKind.STRAIGHT);
             result.add(new ConnectionDraft(
                     movement,
-                    mainline(site, movement),
+                    mainline(site, movement, RAMP_WIDTH_BLOCKS),
                     RampForm.MAINLINE));
         }
         for (ApproachDirection from : CLOCKWISE_APPROACHES) {
@@ -117,11 +145,16 @@ public final class InterchangeLayoutFactory {
                 && usesLoop(design.type(), canonicalDirection(from, missingApproach));
         result.add(new ConnectionDraft(
                 movement,
-                loop ? loopTurn(design, site, movement) : directTurn(design, site, movement),
+                loop
+                        ? loopTurn(design, site, movement, RAMP_WIDTH_BLOCKS)
+                        : directTurn(design, site, movement, RAMP_WIDTH_BLOCKS),
                 loop ? RampForm.LOOP : RampForm.DIRECT));
     }
 
-    private RampRoute mainline(InterchangeGeometrySite site, InterchangeMovement movement) {
+    private RampRoute mainline(
+            InterchangeGeometrySite site,
+            InterchangeMovement movement,
+            int widthBlocks) {
         InterchangePort start = site.port(movement.from(), TrafficFlow.INBOUND);
         InterchangePort end = site.port(movement.to(), TrafficFlow.OUTBOUND);
         RampPathBuilder builder = new RampPathBuilder(standard, start.point(), start.heading())
@@ -132,13 +165,14 @@ public final class InterchangeLayoutFactory {
                         site.approachRunBlocks(),
                         site.centerElevation(movement.from())),
                 new RampElevationKeyframe(builder.lengthBlocks(), end.elevation())));
-        return new RampRoute(centerline, RAMP_WIDTH_BLOCKS);
+        return new RampRoute(centerline, widthBlocks);
     }
 
     private RampRoute directTurn(
             InterchangeDesign design,
             InterchangeGeometrySite site,
-            InterchangeMovement movement) {
+            InterchangeMovement movement,
+            int widthBlocks) {
         double radius = design.minimumRadiusBlocks();
         double tangent = site.approachRunBlocks() - radius;
         InterchangePort start = site.port(movement.from(), TrafficFlow.INBOUND);
@@ -154,13 +188,14 @@ public final class InterchangeLayoutFactory {
                 .straight(tangent)
                 .build(start.elevation(), end.elevation());
         requireEndpoint(design, movement, end, centerline);
-        return new RampRoute(centerline, RAMP_WIDTH_BLOCKS);
+        return new RampRoute(centerline, widthBlocks);
     }
 
     private RampRoute loopTurn(
             InterchangeDesign design,
             InterchangeGeometrySite site,
-            InterchangeMovement movement) {
+            InterchangeMovement movement,
+            int widthBlocks) {
         double loopRadius = (design.minimumRadiusBlocks() - LANE_OFFSET_BLOCKS) / 2.0;
         double tangent = site.approachRunBlocks() + LANE_OFFSET_BLOCKS + loopRadius;
         InterchangePort start = site.port(movement.from(), TrafficFlow.INBOUND);
@@ -171,7 +206,27 @@ public final class InterchangeLayoutFactory {
                 .straight(tangent)
                 .build(start.elevation(), end.elevation());
         requireEndpoint(design, movement, end, centerline);
-        return new RampRoute(centerline, RAMP_WIDTH_BLOCKS);
+        return new RampRoute(centerline, widthBlocks);
+    }
+
+    private static InterchangeMovement rotate(
+            InterchangeMovement canonical,
+            ApproachDirection missingApproach) {
+        if (missingApproach == null) {
+            return canonical;
+        }
+        ApproachDirection from = rotate(canonical.from(), missingApproach.ordinal());
+        ApproachDirection to = rotate(canonical.to(), missingApproach.ordinal());
+        return new InterchangeMovement(from, to, canonical.kind());
+    }
+
+    private static ApproachDirection rotate(
+            ApproachDirection direction,
+            int clockwiseQuarterTurns) {
+        ApproachDirection[] directions = ApproachDirection.values();
+        return directions[Math.floorMod(
+                direction.ordinal() + clockwiseQuarterTurns,
+                directions.length)];
     }
 
     private static List<InterchangeConnection> finishConnections(
