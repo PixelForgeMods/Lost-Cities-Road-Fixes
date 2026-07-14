@@ -9,7 +9,7 @@ all seven inspected chunks.
 
 The validated production artifact is
 `lostcitiesroadfixes-1.0.0+mc1.21.1.jar`, SHA-256
-`1ed5d4eedfa2ab36f91866d7d6c2c8d404d15513c9fc230b36e39bff4576867e`.
+`170fd00218f8cc88faa305b8a63ae64ad99767fc0a6694b4c11745b0aa40751b`.
 
 ## Exact environment
 
@@ -58,14 +58,14 @@ The final full-pack run recorded:
 - post-cleanup replacement rendering and native-highway suppression both activated
 - player joined at `(-1015.573, 87.216, -2208.196)`
 - calculated `lostcitiesroadfixes:cloverleaf` selected at chunk `(-112, -192)`
-- 580 native suppressions and 1,135 late-render invocations
+- 546 native suppressions and 1,042 late-render invocations
 - 8 interchange regions planned; 1 selected, 1 rejected, 0 conflict-suppressed
 - road/interchange cache sizes 26/8, each below the configured bound of 512
 - all dimensions saved before clean process exit
 
 Minecraft's cold start-region timer measured 5,216 ms without the addon and
-6,857 ms with the production addon: an observed one-run delta of 1,641 ms
-(31.46%). This is a paired operational observation on the client's machine, not
+6,060 ms with the final production addon: an observed one-run delta of 844 ms
+(16.18%). This is a paired operational observation on the client's machine, not
 a statistical benchmark; it should not be generalized as a fixed percentage.
 
 ## Save safety and pack observations

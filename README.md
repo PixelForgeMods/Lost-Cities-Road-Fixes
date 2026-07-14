@@ -11,6 +11,13 @@ Lost Cities: Road Fixes is a server-side-capable NeoForge 1.21.1 addon that repl
 
 The mod is intentionally pinned to one Lost Cities build because its compatibility layer targets world-generation internals that are not part of the public Lost Cities API.
 
+## Installation
+
+Back up the world, place the universal JAR in the server and client `mods`
+folders, and install it before exploring or pregenerating affected terrain.
+Road Fixes only changes newly generated chunks. See the
+[1.0.0 release notes](docs/release/1.0.0.md) and [changelog](CHANGELOG.md).
+
 ## Generation behavior
 
 The addon suppresses Lost Cities' native highway block placement while retaining its deterministic highway-level decisions for compatibility with buildings and railways. Replacement 32-block roads are written after Lost Cities explosion damage and floating-block cleanup, preventing the reported one-chunk bridge deletion.

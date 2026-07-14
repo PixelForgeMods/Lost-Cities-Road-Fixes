@@ -35,9 +35,18 @@ jobs:
         run: |
           ./gradlew test runGameTestServer build --stacktrace
 
-      - name: Upload universal JAR
+      - name: Package release candidate
+        run: |
+          ./gradlew releaseBundle --stacktrace
+          python3 scripts/verify_release_artifact.py \
+            build/libs/lostcitiesroadfixes-1.0.0+mc1.21.1.jar \
+            --bundle build/distributions/lostcitiesroadfixes-1.0.0+mc1.21.1-release.zip
+
+      - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: lostcitiesroadfixes
-          path: build/libs/*.jar
+          path: |
+            build/libs/lostcitiesroadfixes-1.0.0+mc1.21.1.jar
+            build/distributions/lostcitiesroadfixes-1.0.0+mc1.21.1-release.zip
           if-no-files-found: error

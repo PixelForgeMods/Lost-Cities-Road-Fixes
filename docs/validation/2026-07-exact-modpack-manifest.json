@@ -1,5 +1,5 @@
 {
-  "captured_local": "2026-07-15T00:10:32+02:00",
+  "captured_local": "2026-07-15T00:23:15+02:00",
   "hash_algorithm": "SHA-256; aggregate streams path + NUL + lowercase hex digest + LF in path order.",
   "instance_config": {
     "aggregate_sha256": "e9fec65be246c807fbe4bac020e18b52c45c98071033b4f0bcbbf63aea278f0e",
@@ -1584,7 +1584,7 @@
   },
   "path_policy": "Paths are relative; file contents and local absolute paths are omitted.",
   "runtime_jars": {
-    "aggregate_sha256": "ae6b748c0d05c645604ce89404112ff4f2e927642535b11e451c25a4503c7400",
+    "aggregate_sha256": "0e3951c53f580b2e2f2e370fde17995f39cab018654cbcd613bab7a369851af3",
     "client_count": 173,
     "files": [
       {
@@ -2169,8 +2169,8 @@
       },
       {
         "path": "mods/lostcitiesroadfixes-1.0.0+mc1.21.1.jar",
-        "sha256": "1ed5d4eedfa2ab36f91866d7d6c2c8d404d15513c9fc230b36e39bff4576867e",
-        "size": 282818
+        "sha256": "170fd00218f8cc88faa305b8a63ae64ad99767fc0a6694b4c11745b0aa40751b",
+        "size": 283697
       },
       {
         "path": "mods/mace3d-neoforge-1.21.X-1.1.0.jar",
