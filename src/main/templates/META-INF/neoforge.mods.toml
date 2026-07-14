@@ -49,9 +49,9 @@ description='''
 Replaces Lost Cities highways with deterministic, continuous road networks and calculated interchanges.
 '''
 
-# The [[mixins]] block allows you to declare your mixin config to FML so that it gets loaded.
-#[[mixins]]
-#config="${mod_id}.mixins.json"
+# The compatibility plugin validates every version-pinned Lost Cities hook before world generation.
+[[mixins]]
+config="${mod_id}.mixins.json"
 
 # The [[accessTransformers]] block allows you to declare where your AT file is.
 # If this block is omitted, a fallback attempt will be made to load an AT from META-INF/accesstransformer.cfg
