@@ -13,7 +13,9 @@ public record InterchangeGeometrySite(
         HalfBlockElevation zRoadNativeElevation,
         HalfBlockElevation xRoadCenterElevation,
         HalfBlockElevation zRoadCenterElevation) {
-    private static final double LANE_OFFSET = 8.0;
+    private static final double LEGACY_LANE_OFFSET = 8.0;
+    private static final double OUTER_THROUGH_LANE_OFFSET = 12.0;
+    private static final double AUXILIARY_LANE_OFFSET = 20.0;
 
     public InterchangeGeometrySite {
         Objects.requireNonNull(center, "center");
@@ -41,34 +43,60 @@ public record InterchangeGeometrySite(
     }
 
     public InterchangePort port(ApproachDirection direction, TrafficFlow flow) {
+        return portAt(direction, flow, approachRunBlocks, LEGACY_LANE_OFFSET);
+    }
+
+    public InterchangePort outerThroughPort(
+            ApproachDirection direction,
+            TrafficFlow flow) {
+        return portAt(
+                direction, flow, approachRunBlocks, OUTER_THROUGH_LANE_OFFSET);
+    }
+
+    public InterchangePort auxiliaryPort(
+            ApproachDirection direction,
+            TrafficFlow flow,
+            int distanceFromCenter) {
+        if (distanceFromCenter < 1 || distanceFromCenter > approachRunBlocks) {
+            throw new IllegalArgumentException(
+                    "Auxiliary terminal distance must be between 1 and "
+                            + approachRunBlocks);
+        }
+        return portAt(direction, flow, distanceFromCenter, AUXILIARY_LANE_OFFSET);
+    }
+
+    private InterchangePort portAt(
+            ApproachDirection direction,
+            TrafficFlow flow,
+            double run,
+            double laneOffset) {
         Objects.requireNonNull(direction, "direction");
         Objects.requireNonNull(flow, "flow");
-        double run = approachRunBlocks;
         PlanarPoint localPoint;
         RoadHeading heading;
         switch (direction) {
             case NORTH -> {
                 localPoint = flow == TrafficFlow.INBOUND
-                        ? new PlanarPoint(-LANE_OFFSET, -run)
-                        : new PlanarPoint(LANE_OFFSET, -run);
+                        ? new PlanarPoint(-laneOffset, -run)
+                        : new PlanarPoint(laneOffset, -run);
                 heading = flow == TrafficFlow.INBOUND ? RoadHeading.SOUTH : RoadHeading.NORTH;
             }
             case EAST -> {
                 localPoint = flow == TrafficFlow.INBOUND
-                        ? new PlanarPoint(run, -LANE_OFFSET)
-                        : new PlanarPoint(run, LANE_OFFSET);
+                        ? new PlanarPoint(run, -laneOffset)
+                        : new PlanarPoint(run, laneOffset);
                 heading = flow == TrafficFlow.INBOUND ? RoadHeading.WEST : RoadHeading.EAST;
             }
             case SOUTH -> {
                 localPoint = flow == TrafficFlow.INBOUND
-                        ? new PlanarPoint(LANE_OFFSET, run)
-                        : new PlanarPoint(-LANE_OFFSET, run);
+                        ? new PlanarPoint(laneOffset, run)
+                        : new PlanarPoint(-laneOffset, run);
                 heading = flow == TrafficFlow.INBOUND ? RoadHeading.NORTH : RoadHeading.SOUTH;
             }
             case WEST -> {
                 localPoint = flow == TrafficFlow.INBOUND
-                        ? new PlanarPoint(-run, LANE_OFFSET)
-                        : new PlanarPoint(-run, -LANE_OFFSET);
+                        ? new PlanarPoint(-run, laneOffset)
+                        : new PlanarPoint(-run, -laneOffset);
                 heading = flow == TrafficFlow.INBOUND ? RoadHeading.EAST : RoadHeading.WEST;
             }
             default -> throw new IllegalStateException("Unhandled approach " + direction);

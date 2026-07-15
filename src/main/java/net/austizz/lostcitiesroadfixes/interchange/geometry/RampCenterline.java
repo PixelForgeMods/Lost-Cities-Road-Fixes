@@ -66,6 +66,26 @@ public record RampCenterline(
         return elevationAt(elevationProfile, stationBlocks, lengthBlocks);
     }
 
+    public RampCenterline withElevationProfile(
+            List<RampElevationKeyframe> replacementProfile) {
+        List<RampElevationKeyframe> profile = List.copyOf(replacementProfile);
+        List<RampCenterlineSample> reprofiled = samples.stream()
+                .map(sample -> new RampCenterlineSample(
+                        sample.stationBlocks(),
+                        sample.point(),
+                        elevationAt(profile, sample.stationBlocks(), lengthBlocks),
+                        sample.headingRadians()))
+                .toList();
+        return new RampCenterline(
+                startPose,
+                endPose,
+                lengthBlocks,
+                profile.getFirst().elevation(),
+                profile.getLast().elevation(),
+                profile,
+                reprofiled);
+    }
+
     static HalfBlockElevation elevationAt(
             List<RampElevationKeyframe> profile,
             double stationBlocks,

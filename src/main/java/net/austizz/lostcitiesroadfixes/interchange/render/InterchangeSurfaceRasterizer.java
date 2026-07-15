@@ -27,7 +27,7 @@ public final class InterchangeSurfaceRasterizer {
         List<RampRoute> ramps = new ArrayList<>();
         for (PlannedInterchangeGeometry interchange : interchanges) {
             arterials.addAll(interchange.arterials());
-            ramps.addAll(interchange.turningRoutes());
+            ramps.addAll(interchange.rampAndAuxiliaryRoutes());
         }
         ChunkRoadSurface arterialSurface = arterialRasterizer.rasterize(
                 targetChunk, arterials);

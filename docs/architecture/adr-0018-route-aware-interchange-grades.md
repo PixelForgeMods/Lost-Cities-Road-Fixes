@@ -12,8 +12,8 @@ Y=71 and Y=89. Its 18-block rise needs 288 horizontal blocks under the accepted
 half-block-per-eight-block grade.
 
 The site had 256-block approaches, so the selector rejected every family even
-though a cloverleaf's shortest right-turn route has 307 usable blocks before it
-joins the destination arterial. When selection was allowed in isolation,
+though a larger directional route can provide sufficient usable grade length.
+When selection was allowed in isolation,
 independent linear elevation profiles also entered shared merge tangents at
 different heights. The upper arterial's foundation then overwrote the final
 Y=88 ramp surface and left a two-block step into the Y=89 deck.
@@ -25,6 +25,10 @@ cross-deck run available before the destination merge tangent. A direct right
 turn is the shortest required movement in every complete three- and four-way
 layout, so its first tangent plus quarter-circle arc is the conservative bound.
 Sites remain rejected when that real route cannot satisfy the road standard.
+ADR-0019 further requires the grade to begin only after a ramp has left its
+auxiliary lane and rejects a cloverleaf when its loops cannot remain separated
+from the outer ramps. The reported 18-block crossing therefore uses a
+four-level stack with 512-block approaches in version 1.1.0.
 
 Turning routes use a shared front-loaded elevation profile: they transition at
 the maximum accepted grade, reach the destination elevation before the final
@@ -42,8 +46,8 @@ two decks and is the end-to-end regression signal.
 
 ## Consequences
 
-The reported level-0/level-3 crossing now receives calculated interchange
-geometry and has a continuous driveable path between Y=71 and Y=89. Compact
+The reported level-0/level-3 crossing receives calculated interchange geometry
+and has a continuous driveable path between Y=71 and Y=89. Compact
 designs whose pre-merge run is genuinely too short remain unavailable, and
 larger level differences can still be rejected rather than violating grade or
 clearance limits. Existing chunks are not rewritten; validation requires fresh

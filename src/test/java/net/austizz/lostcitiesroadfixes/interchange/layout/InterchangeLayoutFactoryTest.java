@@ -11,9 +11,10 @@ import net.austizz.lostcitiesroadfixes.road.HalfBlockElevation;
 import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
-import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,7 +28,7 @@ class InterchangeLayoutFactoryTest {
     private static final double TOLERANCE = 1.0e-8;
     private static final InterchangeGeometrySite SITE = new InterchangeGeometrySite(
             new PlanarPoint(1_024.0, -2_048.0),
-            200,
+            640,
             new HalfBlockElevation(140),
             new HalfBlockElevation(160));
 
@@ -61,6 +62,35 @@ class InterchangeLayoutFactoryTest {
     }
 
     @Test
+    void everyBuiltInCompilesAtItsAdvertisedMinimumApproach() {
+        List<String> understatedMinimums = new ArrayList<>();
+        for (InterchangeDesign design : InterchangeCatalogue.builtIns()) {
+            int firstCompilable = -1;
+            for (int approach = design.minimumApproachRunBlocks(); approach <= 640;
+                 approach += 16) {
+                InterchangeGeometrySite site = new InterchangeGeometrySite(
+                        new PlanarPoint(0.0, 0.0),
+                        approach,
+                        new HalfBlockElevation(140),
+                        new HalfBlockElevation(160));
+                try {
+                    factory.create(design, site);
+                    firstCompilable = approach;
+                    break;
+                } catch (IllegalArgumentException ignored) {
+                    // Keep searching chunk-aligned approach lengths for the safe minimum.
+                }
+            }
+            if (firstCompilable != design.minimumApproachRunBlocks()) {
+                understatedMinimums.add(
+                        design.id() + " declares " + design.minimumApproachRunBlocks()
+                                + " but first compiles at " + firstCompilable);
+            }
+        }
+        assertTrue(understatedMinimums.isEmpty(), understatedMinimums.toString());
+    }
+
+    @Test
     void usesTheExpectedLoopCountForEachFamily() {
         Map<InterchangeType, Integer> expected = new EnumMap<>(InterchangeType.class);
         expected.put(InterchangeType.TRUMPET, 1);
@@ -81,6 +111,79 @@ class InterchangeLayoutFactoryTest {
     }
 
     @Test
+    void fullCloverleafKeepsEveryEntranceAndExitOnDistinctTerminals() {
+        InterchangeDesign cloverleaf = InterchangeCatalogue.builtIns().stream()
+                .filter(design -> design.type() == InterchangeType.CLOVERLEAF)
+                .findFirst()
+                .orElseThrow();
+        InterchangeLayout layout = factory.create(cloverleaf, SITE);
+
+        for (ApproachDirection approach : ApproachDirection.values()) {
+            List<InterchangeConnection> exits = layout.connections().stream()
+                    .filter(connection -> connection.movement().from() == approach)
+                    .filter(connection -> connection.form() != RampForm.MAINLINE)
+                    .toList();
+            List<InterchangeConnection> entrances = layout.connections().stream()
+                    .filter(connection -> connection.movement().to() == approach)
+                    .filter(connection -> connection.form() != RampForm.MAINLINE)
+                    .toList();
+
+            assertEquals(2, exits.size());
+            assertEquals(2, entrances.size());
+            assertTrue(distance(
+                    exits.get(0).route().centerline().startPose().point(),
+                    exits.get(1).route().centerline().startPose().point()) >= 16.0,
+                    () -> approach + " exit ramps share one terminal");
+            assertTrue(distance(
+                    entrances.get(0).route().centerline().endPose().point(),
+                    entrances.get(1).route().centerline().endPose().point()) >= 16.0,
+                    () -> approach + " entrance ramps share one terminal");
+        }
+    }
+
+    @Test
+    void fullCloverleafTurningMovementsDoNotShareAnUndeclaredSingleLane() {
+        InterchangeDesign cloverleaf = InterchangeCatalogue.builtIns().stream()
+                .filter(design -> design.type() == InterchangeType.CLOVERLEAF)
+                .findFirst()
+                .orElseThrow();
+        List<InterchangeConnection> turns = factory.create(cloverleaf, SITE)
+                .connections().stream()
+                .filter(connection -> connection.form() != RampForm.MAINLINE)
+                .toList();
+
+        for (int left = 0; left < turns.size(); left++) {
+            Set<String> leftInterior = interiorSamples(turns.get(left));
+            for (int right = left + 1; right < turns.size(); right++) {
+                Set<String> shared = new HashSet<>(leftInterior);
+                shared.retainAll(interiorSamples(turns.get(right)));
+                assertTrue(shared.isEmpty(),
+                        turns.get(left).movement() + " and " + turns.get(right).movement()
+                                + " share an undeclared lane segment");
+            }
+        }
+    }
+
+    @Test
+    void fullCloverleafHasNoInteriorAtGradeRampCrossings() {
+        InterchangeDesign cloverleaf = InterchangeCatalogue.builtIns().stream()
+                .filter(design -> design.type() == InterchangeType.CLOVERLEAF)
+                .findFirst()
+                .orElseThrow();
+        InterchangeLayout layout = factory.create(cloverleaf, SITE);
+        List<InterchangeConnection> turns = layout.connections().stream()
+                .filter(connection -> connection.form() != RampForm.MAINLINE)
+                .toList();
+
+        for (int left = 0; left < turns.size(); left++) {
+            for (int right = left + 1; right < turns.size(); right++) {
+                assertNoInteriorAtGradeApproach(
+                        turns.get(left), turns.get(right), layout.auxiliaryLanes());
+            }
+        }
+    }
+
+    @Test
     void everyConnectionUsesTheCorrectPortsAndDeckElevations() {
         for (InterchangeDesign design : InterchangeCatalogue.builtIns()) {
             InterchangeLayout layout = factory.create(design, SITE);
@@ -90,11 +193,48 @@ class InterchangeLayoutFactoryTest {
                 InterchangePort end = SITE.port(
                         connection.movement().to(), TrafficFlow.OUTBOUND);
 
-                assertPoint(start.point(), connection.route().centerline().startPose().point());
-                assertPoint(end.point(), connection.route().centerline().endPose().point());
+                if (connection.form() == RampForm.MAINLINE) {
+                    assertPoint(start.point(), connection.route().centerline().startPose().point());
+                    assertPoint(end.point(), connection.route().centerline().endPose().point());
+                } else {
+                    assertTrue(distance(SITE.center(),
+                            connection.route().centerline().startPose().point())
+                            < SITE.approachRunBlocks());
+                    assertTrue(distance(SITE.center(),
+                            connection.route().centerline().endPose().point())
+                            < SITE.approachRunBlocks());
+                }
                 assertEquals(start.elevation(), connection.route().centerline().startElevation());
                 assertEquals(end.elevation(), connection.route().centerline().endElevation());
                 assertEquals(8, connection.route().widthBlocks());
+            }
+        }
+    }
+
+    @Test
+    void builtInsAddOneContinuousAuxiliaryLanePerMainlineMovement() {
+        for (InterchangeDesign design : InterchangeCatalogue.builtIns()) {
+            InterchangeLayout layout = factory.create(design, SITE);
+            long mainlines = layout.connections().stream()
+                    .filter(connection -> connection.form() == RampForm.MAINLINE)
+                    .count();
+
+            assertEquals(mainlines, layout.auxiliaryLanes().size(), design.id().toString());
+            for (InterchangeAuxiliaryLane lane : layout.auxiliaryLanes()) {
+                assertPoint(
+                        SITE.outerThroughPort(
+                                lane.mainlineMovement().from(), TrafficFlow.INBOUND).point(),
+                        lane.route().centerline().startPose().point());
+                assertPoint(
+                        SITE.outerThroughPort(
+                                lane.mainlineMovement().to(), TrafficFlow.OUTBOUND).point(),
+                        lane.route().centerline().endPose().point());
+                double maximumCrossOffset = lane.route().centerline().samples().stream()
+                        .mapToDouble(sample -> crossOffset(
+                                lane.mainlineMovement().from(), sample.point()))
+                        .max()
+                        .orElseThrow();
+                assertEquals(20.0, maximumCrossOffset, 0.01, design.id().toString());
             }
         }
     }
@@ -300,6 +440,83 @@ class InterchangeLayoutFactoryTest {
             case STRAIGHT -> from.opposite();
             case RIGHT -> from.rightTurnDestination();
             case LEFT -> from.leftTurnDestination();
+        };
+    }
+
+    private static Set<String> interiorSamples(InterchangeConnection connection) {
+        double length = connection.route().centerline().lengthBlocks();
+        return connection.route().centerline().samples().stream()
+                .filter(sample -> sample.stationBlocks() >= 8.0)
+                .filter(sample -> sample.stationBlocks() <= length - 8.0)
+                .map(sample -> Math.round(sample.point().x() * 1_000.0) + ":"
+                        + Math.round(sample.point().z() * 1_000.0) + ":"
+                        + sample.elevation().halfBlocks())
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    private static void assertNoInteriorAtGradeApproach(
+            InterchangeConnection left,
+            InterchangeConnection right,
+            List<InterchangeAuxiliaryLane> auxiliaryLanes) {
+        double leftLength = left.route().centerline().lengthBlocks();
+        double rightLength = right.route().centerline().lengthBlocks();
+        for (var leftSample : left.route().centerline().samples()) {
+            if (leftSample.stationBlocks() < 16.0
+                    || leftSample.stationBlocks() > leftLength - 16.0) {
+                continue;
+            }
+            for (var rightSample : right.route().centerline().samples()) {
+                if (rightSample.stationBlocks() < 16.0
+                        || rightSample.stationBlocks() > rightLength - 16.0) {
+                    continue;
+                }
+                if (distance(leftSample.point(), rightSample.point()) >= 2.0) {
+                    continue;
+                }
+                double clearance = StrictMath.abs(
+                        leftSample.elevation().blocks() - rightSample.elevation().blocks());
+                if (clearance < 7.0 && isDeclaredAuxiliaryOverlap(
+                        left, right, leftSample.point(), auxiliaryLanes)) {
+                    continue;
+                }
+                assertTrue(clearance >= 7.0,
+                        left.movement() + " crosses " + right.movement()
+                                + " at grade near " + leftSample.point()
+                                + " (leftY=" + leftSample.elevation().blocks()
+                                + ", rightY=" + rightSample.elevation().blocks() + ')');
+            }
+        }
+    }
+
+    private static boolean isDeclaredAuxiliaryOverlap(
+            InterchangeConnection left,
+            InterchangeConnection right,
+            PlanarPoint point,
+            List<InterchangeAuxiliaryLane> auxiliaryLanes) {
+        return auxiliaryLanes.stream()
+                .filter(lane -> touchesAuxiliary(left, lane)
+                        && touchesAuxiliary(right, lane))
+                .flatMap(lane -> lane.route().centerline().samples().stream())
+                .anyMatch(sample -> distance(sample.point(), point) < 12.5);
+    }
+
+    private static boolean touchesAuxiliary(
+            InterchangeConnection turn,
+            InterchangeAuxiliaryLane lane) {
+        return turn.movement().from() == lane.mainlineMovement().from()
+                || turn.movement().to() == lane.mainlineMovement().to();
+    }
+
+    private static double distance(PlanarPoint left, PlanarPoint right) {
+        return StrictMath.hypot(left.x() - right.x(), left.z() - right.z());
+    }
+
+    private static double crossOffset(
+            ApproachDirection direction,
+            PlanarPoint point) {
+        return switch (direction) {
+            case EAST, WEST -> StrictMath.abs(point.z() - SITE.center().z());
+            case NORTH, SOUTH -> StrictMath.abs(point.x() - SITE.center().x());
         };
     }
 

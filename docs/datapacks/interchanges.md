@@ -18,6 +18,12 @@ uses. Road coordinates are deliberately not configurable: the mod joins fixed
 native-road ports with validated straight and circular geometry so a declaration
 cannot leave a disconnected endpoint.
 
+Format 2 retains its exact eight-block native-port behavior for compatibility
+with existing datapacks. Automatic auxiliary lanes and staggered professional
+terminals apply to built-in templates and format-1 family replacements. A
+format-2 author owns the explicit movement widths, forms, and terminal behavior
+described here.
+
 This complete four-way example has one loop ramp:
 
 ```json
@@ -27,7 +33,7 @@ This complete four-way example has one loop ramp:
   "junction_form": "four_way",
   "minimum_radius_blocks": 64,
   "required_quadrants": 2,
-  "minimum_approach_run_blocks": 112,
+  "minimum_approach_run_blocks": 160,
   "structure_levels": 2,
   "uses_loop_ramps": true,
   "all_movements_free_flow": false,
@@ -117,7 +123,7 @@ use the built-in route template for their `family`:
   "junction_form": "four_way",
   "minimum_radius_blocks": 56,
   "required_quadrants": 2,
-  "minimum_approach_run_blocks": 96,
+  "minimum_approach_run_blocks": 160,
   "structure_levels": 2,
   "uses_loop_ramps": false,
   "all_movements_free_flow": false,

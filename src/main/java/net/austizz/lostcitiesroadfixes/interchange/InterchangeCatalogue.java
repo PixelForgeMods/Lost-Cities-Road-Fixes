@@ -7,21 +7,21 @@ import java.util.List;
 public final class InterchangeCatalogue {
     private static final List<InterchangeDesign> BUILT_INS = List.of(
             design(InterchangeType.TRUMPET, JunctionForm.THREE_WAY,
-                    64, 2, 96, 2, true, true, TrafficDemand.REGIONAL, 6, 3),
+                    64, 2, 160, 2, true, true, TrafficDemand.REGIONAL, 6, 3),
             design(InterchangeType.THREE_WAY_DIRECTIONAL, JunctionForm.THREE_WAY,
-                    96, 3, 128, 3, false, true, TrafficDemand.HIGH, 6, 5),
+                    96, 3, 176, 3, false, true, TrafficDemand.HIGH, 6, 5),
             design(InterchangeType.SPUI, JunctionForm.FOUR_WAY,
-                    40, 1, 96, 2, false, false, TrafficDemand.HIGH, 4, 3),
+                    40, 1, 160, 2, false, false, TrafficDemand.HIGH, 4, 3),
             design(InterchangeType.PARTIAL_CLOVERLEAF, JunctionForm.FOUR_WAY,
-                    80, 2, 128, 2, true, false, TrafficDemand.HIGH, 6, 2),
+                    80, 2, 160, 2, true, false, TrafficDemand.HIGH, 6, 2),
             design(InterchangeType.SINGLE_QUADRANT, JunctionForm.FOUR_WAY,
-                    56, 1, 96, 2, false, false, TrafficDemand.LOCAL, 4, 1),
+                    56, 1, 160, 2, false, false, TrafficDemand.LOCAL, 4, 1),
             design(InterchangeType.DIAMOND, JunctionForm.FOUR_WAY,
-                    56, 2, 96, 2, false, false, TrafficDemand.REGIONAL, 4, 1),
+                    56, 2, 160, 2, false, false, TrafficDemand.REGIONAL, 4, 1),
             design(InterchangeType.CLOVERLEAF, JunctionForm.FOUR_WAY,
-                    112, 4, 160, 2, true, true, TrafficDemand.HIGH, 12, 5),
+                    224, 4, 320, 2, true, true, TrafficDemand.HIGH, 12, 5),
             design(InterchangeType.STACK, JunctionForm.FOUR_WAY,
-                    96, 4, 160, 4, false, true, TrafficDemand.HIGH, 12, 8));
+                    96, 4, 512, 4, false, true, TrafficDemand.HIGH, 12, 8));
 
     private InterchangeCatalogue() {
     }

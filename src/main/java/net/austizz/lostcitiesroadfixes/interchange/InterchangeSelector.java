@@ -80,6 +80,16 @@ public final class InterchangeSelector {
             reasons.add("turning-ramp grade requires " + gradeRun
                     + " blocks but the shortest route provides " + turningRouteRun);
         }
+        if (design.type() == InterchangeType.CLOVERLEAF) {
+            double loopRadius = StrictMath.max(
+                    standard.minimumCurveRadiusBlocks(
+                            net.austizz.lostcitiesroadfixes.road.RoadKind.RAMP),
+                    StrictMath.ceil(gradeRun / (StrictMath.PI * 1.5)));
+            double outerRadius = design.minimumRadiusBlocks() - 8.0;
+            if (outerRadius < loopRadius * 6.0) {
+                reasons.add("loop grades cannot be separated from the outer ramps");
+            }
+        }
 
         int separationHalfBlocks = site.upperDeck().halfBlocks() - site.lowerDeck().halfBlocks();
         int minimumClearanceHalfBlocks = standard.minimumVehicleClearanceBlocks() * 2;

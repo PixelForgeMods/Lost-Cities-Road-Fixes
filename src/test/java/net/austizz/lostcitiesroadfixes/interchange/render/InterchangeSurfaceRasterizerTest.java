@@ -58,13 +58,17 @@ class InterchangeSurfaceRasterizerTest {
     }
 
     @Test
-    void rendersTwoFullWidthDecksAtTenBlockCenterSeparation() {
+    void rendersTwoDecksAndTheirContinuousAuxiliaryLanes() {
         PlannedInterchangeGeometry geometry = geometryPlanner.create(selected(false));
         ChunkRoadSurface center = rasterizer.rasterize(
                 new ChunkPoint(0, 0), List.of(geometry));
 
         assertTrue(center.cellAt(8, 8, elevation(140)).isPresent());
-        assertTrue(center.cellAt(8, 8, elevation(160)).isPresent());
+        assertTrue(center.cellAt(8, 8, elevation(160)).isPresent(), () ->
+                center.cells().stream()
+                        .filter(cell -> cell.position().x() == 8
+                                && cell.position().z() == 8)
+                        .toList().toString());
         assertFalse(center.cellAt(8, 8, elevation(152)).isPresent());
 
         long width = List.of(new ChunkPoint(0, -1), new ChunkPoint(0, 0), new ChunkPoint(0, 1))
@@ -74,20 +78,35 @@ class InterchangeSurfaceRasterizerTest {
                 .filter(cell -> cell.position().x() == 8)
                 .filter(cell -> cell.position().elevation().equals(elevation(140)))
                 .count();
-        assertEquals(32, width);
+        assertEquals(48, width);
     }
 
     @Test
     void returnsToNativeElevationAtTheEnvelopeAndKeepsChunkSeamsClosed() {
         PlannedInterchangeGeometry geometry = geometryPlanner.create(selected(false));
         ChunkRoadSurface beforeEndpoint = rasterizer.rasterize(
-                new ChunkPoint(0, 15), List.of(geometry));
+                new ChunkPoint(0, 19), List.of(geometry));
         ChunkRoadSurface endpoint = rasterizer.rasterize(
-                new ChunkPoint(0, 16), List.of(geometry));
+                new ChunkPoint(0, 20), List.of(geometry));
 
-        assertTrue(beforeEndpoint.cellAt(8, 255, elevation(153)).isPresent()
-                || beforeEndpoint.cellAt(8, 255, elevation(152)).isPresent());
-        assertTrue(endpoint.cellAt(8, 264, elevation(152)).isPresent());
+        assertTrue(beforeEndpoint.cellAt(8, 319, elevation(153)).isPresent()
+                || beforeEndpoint.cellAt(8, 319, elevation(152)).isPresent());
+        assertTrue(endpoint.cellAt(8, 328, elevation(152)).isPresent());
+    }
+
+    @Test
+    void auxiliaryLaneUsesAContinuousTaperBeforeTheFirstRampTerminal() {
+        PlannedInterchangeGeometry geometry = geometryPlanner.create(selected(false));
+        ChunkRoadSurface start = rasterizer.rasterize(
+                new ChunkPoint(-20, 1), List.of(geometry));
+        ChunkRoadSurface middle = rasterizer.rasterize(
+                new ChunkPoint(-19, 1), List.of(geometry));
+        ChunkRoadSurface fullWidth = rasterizer.rasterize(
+                new ChunkPoint(-18, 1), List.of(geometry));
+
+        assertFalse(start.cellAt(-312, 24, elevation(140)).isPresent());
+        assertTrue(middle.cellAt(-296, 24, elevation(140)).isPresent());
+        assertTrue(fullWidth.cellAt(-280, 24, elevation(140)).isPresent());
     }
 
     @Test
@@ -169,9 +188,9 @@ class InterchangeSurfaceRasterizerTest {
         PlannedInterchangeGeometry fourWay = geometryPlanner.create(selected(false));
         PlannedInterchangeGeometry threeWay = geometryPlanner.create(selected(true));
 
-        assertTrue(fourWay.replaces(tile(new ChunkPoint(15, 0), RoadAxis.X, 140)));
-        assertFalse(fourWay.replaces(tile(new ChunkPoint(17, 0), RoadAxis.X, 140)));
-        assertFalse(fourWay.replaces(tile(new ChunkPoint(15, 1), RoadAxis.X, 140)));
+        assertTrue(fourWay.replaces(tile(new ChunkPoint(19, 0), RoadAxis.X, 140)));
+        assertFalse(fourWay.replaces(tile(new ChunkPoint(21, 0), RoadAxis.X, 140)));
+        assertFalse(fourWay.replaces(tile(new ChunkPoint(19, 1), RoadAxis.X, 140)));
         assertFalse(threeWay.replaces(tile(new ChunkPoint(0, -1), RoadAxis.Z, 152)));
         assertTrue(threeWay.replaces(tile(new ChunkPoint(0, 1), RoadAxis.Z, 152)));
     }
@@ -193,8 +212,8 @@ class InterchangeSurfaceRasterizerTest {
                 0,
                 1,
                 approaches,
-                256,
-                128,
+                320,
+                240,
                 threeWay ? 3 : 4,
                 TrafficDemand.HIGH,
                 4,
@@ -219,8 +238,8 @@ class InterchangeSurfaceRasterizerTest {
                 0,
                 3,
                 EnumSet.allOf(ApproachDirection.class),
+                512,
                 256,
-                128,
                 4,
                 TrafficDemand.HIGH,
                 4,

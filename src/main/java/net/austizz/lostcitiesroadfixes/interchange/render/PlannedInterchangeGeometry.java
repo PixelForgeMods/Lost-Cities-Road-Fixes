@@ -31,6 +31,18 @@ public record PlannedInterchangeGeometry(
                 .toList();
     }
 
+    public List<RampRoute> auxiliaryRoutes() {
+        return layout.auxiliaryLanes().stream()
+                .map(net.austizz.lostcitiesroadfixes.interchange.layout.InterchangeAuxiliaryLane::route)
+                .toList();
+    }
+
+    public List<RampRoute> rampAndAuxiliaryRoutes() {
+        return java.util.stream.Stream.concat(
+                        turningRoutes().stream(), auxiliaryRoutes().stream())
+                .toList();
+    }
+
     public boolean replaces(ElevatedRoadTile road) {
         return arterials.stream().anyMatch(arterial -> arterial.replaces(road));
     }

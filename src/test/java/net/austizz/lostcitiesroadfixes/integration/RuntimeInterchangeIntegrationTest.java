@@ -76,16 +76,16 @@ class RuntimeInterchangeIntegrationTest {
     @Test
     void nativeRoadResumesImmediatelyBeyondAnEnvelopePortInTheSameChunk() {
         PlannedInterchangeGeometry geometry = geometry();
-        ChunkPoint endpointChunk = new ChunkPoint(0, 16);
+        ChunkPoint endpointChunk = new ChunkPoint(0, 20);
 
         ChunkRoadSurface surface = new RuntimeRoadSurfaceComposer().compose(
                 endpointChunk,
                 List.of(tile(endpointChunk, RoadAxis.Z, 152)),
                 List.of(geometry));
 
-        assertTrue(surface.cellAt(8, 264, elevation(152)).isPresent());
-        assertTrue(surface.cellAt(8, 265, elevation(152)).isPresent());
-        assertTrue(surface.cellAt(8, 271, elevation(152)).isPresent());
+        assertTrue(surface.cellAt(8, 328, elevation(152)).isPresent());
+        assertTrue(surface.cellAt(8, 329, elevation(152)).isPresent());
+        assertTrue(surface.cellAt(8, 335, elevation(152)).isPresent());
     }
 
     @Test
@@ -107,7 +107,7 @@ class RuntimeInterchangeIntegrationTest {
     }
 
     @Test
-    void regionalGeometryFiltersAtTheMaximumSixteenChunkEnvelope() {
+    void regionalGeometryFiltersAtTheMaximumTwentyChunkEnvelope() {
         PlannedInterchangeGeometry geometry = geometry();
         RegionalInterchangeGeometryPlan plan = new RegionalInterchangeGeometryPlan(
                 new RoadPlanKey(1L, "minecraft:overworld", new PlanningRegion(0, 0), "test"),
@@ -115,10 +115,10 @@ class RuntimeInterchangeIntegrationTest {
                 0,
                 0);
 
-        assertEquals(List.of(geometry), plan.affecting(new ChunkPoint(16, 0)));
-        assertTrue(plan.affecting(new ChunkPoint(17, 0)).isEmpty());
-        assertTrue(geometry.mayAffect(new ChunkPoint(-16, -16)));
-        assertFalse(geometry.mayAffect(new ChunkPoint(-17, -17)));
+        assertEquals(List.of(geometry), plan.affecting(new ChunkPoint(20, 0)));
+        assertTrue(plan.affecting(new ChunkPoint(21, 0)).isEmpty());
+        assertTrue(geometry.mayAffect(new ChunkPoint(-20, -20)));
+        assertFalse(geometry.mayAffect(new ChunkPoint(-21, -21)));
     }
 
     @Test
@@ -149,8 +149,8 @@ class RuntimeInterchangeIntegrationTest {
                 0,
                 1,
                 EnumSet.allOf(ApproachDirection.class),
-                256,
-                128,
+                320,
+                240,
                 4,
                 TrafficDemand.HIGH,
                 4,

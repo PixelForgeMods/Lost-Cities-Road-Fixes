@@ -47,7 +47,7 @@ class InterchangeSelectorTest {
         assertSelected(InterchangeType.DIAMOND,
                 site(JunctionForm.FOUR_WAY, 64, 2, TrafficDemand.REGIONAL, 2, false, false));
         assertSelected(InterchangeType.CLOVERLEAF,
-                site(JunctionForm.FOUR_WAY, 128, 4, TrafficDemand.HIGH, 2, true, true));
+                site(JunctionForm.FOUR_WAY, 256, 4, TrafficDemand.HIGH, 2, true, true));
         assertSelected(InterchangeType.STACK,
                 site(JunctionForm.FOUR_WAY, 128, 4, TrafficDemand.HIGH, 4, false, true));
     }
@@ -112,7 +112,7 @@ class InterchangeSelectorTest {
                 form,
                 radius,
                 quadrants,
-                200,
+                640,
                 new HalfBlockElevation(140),
                 new HalfBlockElevation(160),
                 demand,
