@@ -6,6 +6,7 @@ import java.util.Objects;
 public record RoadDiagnosticsSnapshot(
         boolean compatible,
         long nativeSuppressions,
+        long buildingChunkSuppressions,
         long lateRenderInvocations,
         long interchangeRegionsPlanned,
         long selectedInterchanges,
@@ -23,6 +24,7 @@ public record RoadDiagnosticsSnapshot(
         boolean logFirstInterchangeSelection) {
     public RoadDiagnosticsSnapshot {
         requireNonNegative(nativeSuppressions, "nativeSuppressions");
+        requireNonNegative(buildingChunkSuppressions, "buildingChunkSuppressions");
         requireNonNegative(lateRenderInvocations, "lateRenderInvocations");
         requireNonNegative(interchangeRegionsPlanned, "interchangeRegionsPlanned");
         requireNonNegative(selectedInterchanges, "selectedInterchanges");
@@ -46,6 +48,7 @@ public record RoadDiagnosticsSnapshot(
                 "Lost Cities: Road Fixes diagnostics",
                 "compatibility: compatible=" + compatible,
                 "hooks: nativeSuppressions=" + nativeSuppressions
+                        + ", buildingChunkSuppressions=" + buildingChunkSuppressions
                         + ", lateRenders=" + lateRenderInvocations,
                 "interchanges: regions=" + interchangeRegionsPlanned
                         + ", selected=" + selectedInterchanges

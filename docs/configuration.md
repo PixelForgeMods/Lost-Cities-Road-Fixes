@@ -76,7 +76,7 @@ alias for `lostcitiesroadfixes`.
 `status` reports:
 
 - Lost Cities binary compatibility state;
-- native-suppression and late-render hook counts;
+- native-suppression, building-chunk-suppression, and late-render hook counts;
 - planned, selected, rejected, and rendered interchange counts;
 - conflict-suppressed interchange counts, distinct from infeasible sites;
 - current road/interchange cache sizes;

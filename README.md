@@ -16,7 +16,7 @@ The mod is intentionally pinned to one Lost Cities build because its compatibili
 Back up the world, place the universal JAR in the server and client `mods`
 folders, and install it before exploring or pregenerating affected terrain.
 Road Fixes only changes newly generated chunks. See the
-[1.0.1 release notes](docs/release/1.0.1.md) and [changelog](CHANGELOG.md).
+[1.1.0 release notes](docs/release/1.1.0.md) and [changelog](CHANGELOG.md).
 
 ## Generation behavior
 
@@ -40,6 +40,18 @@ Closely spaced crossings are coordinated before geometry is emitted. When two
 safe interchange cores physically cannot coexist, a stable world-derived winner
 receives the complete interchange and the other crossing remains an intact
 straight flyover; partial or overlapping ramps are never generated.
+
+Built-in interchanges add continuous auxiliary lanes with gradual tapers and
+separate ramp terminals. A full cloverleaf has four loops plus four independent
+outer ramps; large level gaps use a grade-separated stack when the required run
+fits. Deterministic site envelopes vary long four-way crossings across SPUI,
+partial cloverleaf, single-quadrant, diamond, cloverleaf, and stack families.
+
+Before Lost Cities emits a building, the addon reserves the final composed road
+surface plus a one-chunk clearance band. A single building or complete
+multi-building is omitted whenever that reserved area would be touched.
+Implementation and exact-pack evidence are in the
+[professional-interchange regression](docs/regressions/2026-07-professional-cloverleaf-and-building-clearance.md).
 
 ## Development
 

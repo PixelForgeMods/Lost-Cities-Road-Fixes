@@ -40,6 +40,9 @@ public final class LostCitiesCompatibility {
     private static final String HAS_HIGHWAY_DESCRIPTOR =
             "(Lmcjty/lostcities/varia/ChunkCoord;Lmcjty/lostcities/worldgen/IDimensionInfo;"
                     + "Lmcjty/lostcities/config/LostCityProfile;)Z";
+    private static final String BUILDING_INFO_CONSTRUCTOR_DESCRIPTOR =
+            "(Lmcjty/lostcities/varia/ChunkCoord;"
+                    + "Lmcjty/lostcities/worldgen/IDimensionInfo;)V";
     private static final String FIX_AFTER_EXPLOSION_DESCRIPTOR =
             "(Lmcjty/lostcities/worldgen/lost/BuildingInfo;)V";
     private static final String GENERATE_TERRAIN_DESCRIPTOR =
@@ -71,6 +74,8 @@ public final class LostCitiesCompatibility {
             verifyMethod(jarPath, verified, HIGHWAY, "getZHighwayLevel", HIGHWAY_LEVEL_DESCRIPTOR, true);
             verifyMethod(jarPath, verified, HIGHWAYS, "generateHighways", GENERATE_HIGHWAYS_DESCRIPTOR, true);
             verifyMethod(jarPath, verified, BUILDING_INFO, "hasHighway", HAS_HIGHWAY_DESCRIPTOR, true);
+            verifyMethod(jarPath, verified, BUILDING_INFO, "<init>",
+                    BUILDING_INFO_CONSTRUCTOR_DESCRIPTOR, false);
             verifyMethod(jarPath, verified, TERRAIN_FEATURE, "fixAfterExplosion",
                     FIX_AFTER_EXPLOSION_DESCRIPTOR, false);
             verifyMethod(jarPath, verified, TERRAIN_FEATURE, "generate",

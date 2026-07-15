@@ -1,6 +1,9 @@
 package net.austizz.lostcitiesroadfixes.integration;
 
 import mcjty.lostcities.config.LostCityProfile;
+import mcjty.lostcities.api.MultiPos;
+import mcjty.lostcities.varia.ChunkCoord;
+import mcjty.lostcities.worldgen.IDimensionInfo;
 import mcjty.lostcities.worldgen.LostCityTerrainFeature;
 import net.austizz.lostcitiesroadfixes.LostCitiesRoadFixes;
 import net.austizz.lostcitiesroadfixes.config.RoadFixesServerConfig;
@@ -51,6 +54,7 @@ public final class RoadGenerationRuntime {
     private static final RuntimeRoadRenderPipeline RENDER_PIPELINE =
             new RuntimeRoadRenderPipeline();
     private static final AtomicLong NATIVE_SUPPRESSIONS = new AtomicLong();
+    private static final AtomicLong BUILDING_CHUNK_SUPPRESSIONS = new AtomicLong();
     private static final AtomicLong LATE_RENDER_INVOCATIONS = new AtomicLong();
     private static final AtomicLong INTERCHANGE_REGIONS_PLANNED = new AtomicLong();
     private static final AtomicLong SELECTED_INTERCHANGES_PLANNED = new AtomicLong();
@@ -73,6 +77,10 @@ public final class RoadGenerationRuntime {
 
     public static long lateRenderInvocationCount() {
         return LATE_RENDER_INVOCATIONS.get();
+    }
+
+    public static long buildingChunkSuppressionCount() {
+        return BUILDING_CHUNK_SUPPRESSIONS.get();
     }
 
     public static long interchangeRegionPlanCount() {
@@ -109,6 +117,7 @@ public final class RoadGenerationRuntime {
         return new RoadDiagnosticsSnapshot(
                 true,
                 nativeSuppressionCount(),
+                buildingChunkSuppressionCount(),
                 lateRenderInvocationCount(),
                 interchangeRegionPlanCount(),
                 selectedInterchangePlanCount(),
@@ -142,9 +151,10 @@ public final class RoadGenerationRuntime {
                         "Post-cleanup replacement road rendering is active in {}",
                         feature.provider.getType().location());
             }
-            List<ElevatedRoadTile> roads = nearbyRoads(feature, target, settings);
+            List<ElevatedRoadTile> roads = nearbyRoads(
+                    feature.provider, feature.profile, target, settings);
             List<PlannedInterchangeGeometry> interchanges = nearbyInterchanges(
-                    feature, target, settings);
+                    feature.provider, feature.profile, target, settings);
             if (!interchanges.isEmpty()) {
                 INTERCHANGE_RENDER_INVOCATIONS.incrementAndGet();
             }
@@ -170,30 +180,66 @@ public final class RoadGenerationRuntime {
         PLAN_CACHES.invalidateAll();
     }
 
+    public static boolean shouldSuppressBuilding(
+            ChunkCoord coordinate,
+            IDimensionInfo provider,
+            LostCityProfile profile,
+            MultiPos multiPosition) {
+        Objects.requireNonNull(coordinate, "coordinate");
+        Objects.requireNonNull(provider, "provider");
+        Objects.requireNonNull(profile, "profile");
+        Objects.requireNonNull(multiPosition, "multiPosition");
+        ChunkPoint current = new ChunkPoint(
+                coordinate.chunkX(), coordinate.chunkZ());
+        RoadOperationalSettings settings = RoadFixesServerConfig.settings();
+        boolean suppress = RoadBuildingExclusionPolicy.intersectsReservedRoadArea(
+                current,
+                multiPosition,
+                candidate -> hasRoadSurface(provider, profile, candidate, settings));
+        if (suppress && BUILDING_CHUNK_SUPPRESSIONS.incrementAndGet() == 1) {
+            LostCitiesRoadFixes.LOGGER.info(
+                    "Building exclusion reservations are active at chunk {}", current);
+        }
+        return suppress;
+    }
+
+    private static boolean hasRoadSurface(
+            IDimensionInfo provider,
+            LostCityProfile profile,
+            ChunkPoint target,
+            RoadOperationalSettings settings) {
+        List<ElevatedRoadTile> roads = nearbyRoads(provider, profile, target, settings);
+        List<PlannedInterchangeGeometry> interchanges = nearbyInterchanges(
+                provider, profile, target, settings);
+        return !RENDER_PIPELINE.compose(target, roads, interchanges).cells().isEmpty();
+    }
+
     private static List<ElevatedRoadTile> nearbyRoads(
-            LostCityTerrainFeature feature,
+            IDimensionInfo provider,
+            LostCityProfile profile,
             ChunkPoint target,
             RoadOperationalSettings settings) {
         List<ElevatedRoadTile> roads = new ArrayList<>();
         for (int offset = -1; offset <= 1; offset++) {
-            addIfPresent(feature, new ChunkPoint(target.x(), target.z() + offset),
+            addIfPresent(provider, profile, new ChunkPoint(target.x(), target.z() + offset),
                     RoadAxis.X, settings, roads);
-            addIfPresent(feature, new ChunkPoint(target.x() + offset, target.z()),
+            addIfPresent(provider, profile, new ChunkPoint(target.x() + offset, target.z()),
                     RoadAxis.Z, settings, roads);
         }
         return List.copyOf(roads);
     }
 
     private static void addIfPresent(
-            LostCityTerrainFeature feature,
+            IDimensionInfo provider,
+            LostCityProfile profile,
             ChunkPoint candidate,
             RoadAxis axis,
             RoadOperationalSettings settings,
             List<ElevatedRoadTile> roads) {
-        RegionalRoadPlan plan = planFor(feature, candidate, settings);
+        RegionalRoadPlan plan = planFor(provider, profile, candidate, settings);
         plan.tileAt(candidate, axis).ifPresent(tile -> {
             int blockY = Math.addExact(
-                    feature.profile.GROUNDLEVEL,
+                    profile.GROUNDLEVEL,
                     Math.multiplyExact(tile.level(), LostCityTerrainFeature.FLOORHEIGHT));
             roads.add(new ElevatedRoadTile(
                     candidate,
@@ -203,24 +249,26 @@ public final class RoadGenerationRuntime {
     }
 
     private static RegionalRoadPlan planFor(
-            LostCityTerrainFeature feature,
+            IDimensionInfo provider,
+            LostCityProfile profile,
             ChunkPoint chunk,
             RoadOperationalSettings settings) {
         RoadPlanKey key = keyFor(
-                feature,
+                provider,
                 PlanningGrid.regionFor(chunk),
-                roadRulesFingerprint(feature.profile, settings));
+                roadRulesFingerprint(profile, settings));
         return PLAN_CACHES.roadPlan(
                 key,
                 settings.maximumCachedRegions(),
                 ignored -> new ContinuityPlanner(settings.maximumGapChunks()).plan(
                         key,
                         new LostCitiesRoadObservationSource(
-                                feature.provider, feature.profile)));
+                                provider, profile)));
     }
 
     private static List<PlannedInterchangeGeometry> nearbyInterchanges(
-            LostCityTerrainFeature feature,
+            IDimensionInfo provider,
+            LostCityProfile profile,
             ChunkPoint target,
             RoadOperationalSettings settings) {
         List<InterchangeDesign> designs = InterchangeDesignResources.repository().snapshot();
@@ -229,37 +277,40 @@ public final class RoadGenerationRuntime {
         for (PlanningRegion owner : InterchangeRegionWindow.ownerRegionsAffecting(
                 target, MAXIMUM_INTERCHANGE_APPROACH_BLOCKS)) {
             result.addAll(interchangePlanFor(
-                    feature, owner, designs, designFingerprint, settings).affecting(target));
+                    provider, profile, owner, designs, designFingerprint, settings)
+                    .affecting(target));
         }
         return List.copyOf(result);
     }
 
     private static RegionalInterchangeGeometryPlan interchangePlanFor(
-            LostCityTerrainFeature feature,
+            IDimensionInfo provider,
+            LostCityProfile profile,
             PlanningRegion owner,
             List<InterchangeDesign> designs,
             String designFingerprint,
             RoadOperationalSettings settings) {
         RoadPlanKey key = keyFor(
-                feature,
+                provider,
                 owner,
                 interchangeRulesFingerprint(
-                        feature.profile, designFingerprint, settings));
+                        profile, designFingerprint, settings));
         return PLAN_CACHES.interchangePlan(
                 key,
                 settings.maximumCachedRegions(),
-                ignored -> planInterchanges(feature, key, designs, settings));
+                ignored -> planInterchanges(provider, profile, key, designs, settings));
     }
 
     private static RegionalInterchangeGeometryPlan planInterchanges(
-            LostCityTerrainFeature feature,
+            IDimensionInfo provider,
+            LostCityProfile profile,
             RoadPlanKey key,
             List<InterchangeDesign> designs,
             RoadOperationalSettings settings) {
         RoadTileLookup roadLookup = (chunk, axis) ->
-                planFor(feature, chunk, settings).tileAt(chunk, axis);
+                planFor(provider, profile, chunk, settings).tileAt(chunk, axis);
         CrossingElevationModel elevations = new CrossingElevationModel(
-                HalfBlockElevation.ofWholeBlocks(feature.profile.GROUNDLEVEL),
+                HalfBlockElevation.ofWholeBlocks(profile.GROUNDLEVEL),
                 LostCityTerrainFeature.FLOORHEIGHT,
                 ROAD_STANDARD);
         InterchangeRegionalPlanner planner = new InterchangeRegionalPlanner(
@@ -293,12 +344,12 @@ public final class RoadGenerationRuntime {
     }
 
     private static RoadPlanKey keyFor(
-            LostCityTerrainFeature feature,
+            IDimensionInfo provider,
             PlanningRegion region,
             String rulesFingerprint) {
         return new RoadPlanKey(
-                feature.provider.getSeed(),
-                feature.provider.getType().location().toString(),
+                provider.getSeed(),
+                provider.getType().location().toString(),
                 region,
                 rulesFingerprint);
     }

@@ -8,10 +8,14 @@ Lost Cities renders highways before explosion damage and then removes every bloc
 
 ## Decision
 
-Two required, version-pinned Mixins define the integration seam:
+Three required, version-pinned Mixins define the integration seam:
 
 1. `Highways.generateHighways` is canceled at its head, suppressing native highway blocks. Its X/Z highway-level functions remain untouched so buildings, streets, and railways retain their expected topology answers.
 2. `LostCityTerrainFeature.generate` invokes the replacement runtime at return, after explosion damage, debris, primer flush, and `ChunkFixer` work.
+3. `BuildingInfo` reserves the final replacement-road footprint before Lost
+   Cities emits a building. If any part of a single or multi-chunk building,
+   including its one-chunk clearance band, contains a rendered road surface,
+   the complete building is converted to a non-building city chunk.
 
 The runtime builds cached regional continuity plans from the native X/Z observations, converts levels using the profile ground level plus six blocks per level, rasterizes the semantic 32-block surface, and writes only the chunk currently being generated. It clears seven replaceable blocks above each surface cell. Integer half elevations select bottom slabs.
 
@@ -19,4 +23,8 @@ Any runtime exception is rethrown with dimension and chunk context. The addon do
 
 ## Consequences
 
-Explosion cleanup cannot delete a replacement deck. Native asset visuals are replaced by the built-in semantic palette until datapack themes are loaded. The strict Lost Cities binary probe must include both integration targets, and every supported Lost Cities update requires an explicit compatibility review.
+Explosion cleanup cannot delete a replacement deck, and Lost Cities cannot put
+a building through a planned road or interchange. Native asset visuals are
+replaced by the built-in semantic palette until datapack themes are loaded. The
+strict Lost Cities binary probe includes all three integration targets, and
+every supported Lost Cities update requires an explicit compatibility review.

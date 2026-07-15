@@ -24,6 +24,8 @@ class LostCitiesCompatibilityTest {
                 "mcjty.lostcities.worldgen.LostCityTerrainFeature#fixAfterExplosion"));
         assertTrue(report.verifiedSymbols().contains(
                 "mcjty.lostcities.worldgen.LostCityTerrainFeature#generate"));
+        assertTrue(report.verifiedSymbols().contains(
+                "mcjty.lostcities.worldgen.lost.BuildingInfo#<init>"));
     }
 
     @Test
@@ -35,6 +37,7 @@ class LostCitiesCompatibilityTest {
         assertTrue(mixinConfig.contains(
                 "\"plugin\": \"net.austizz.lostcitiesroadfixes.compat.LostCitiesMixinPlugin\""));
         assertTrue(mixinConfig.contains("\"HighwaysMixin\""));
+        assertTrue(mixinConfig.contains("\"BuildingInfoMixin\""));
         assertTrue(mixinConfig.contains("\"LostCityTerrainFeatureMixin\""));
         assertTrue(modMetadata.contains("config=\"lostcitiesroadfixes.mixins.json\""));
     }

@@ -5,6 +5,7 @@
   "plugin": "net.austizz.lostcitiesroadfixes.compat.LostCitiesMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "BuildingInfoMixin",
     "HighwaysMixin",
     "LostCityTerrainFeatureMixin"
   ],

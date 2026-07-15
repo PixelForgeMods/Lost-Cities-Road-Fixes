@@ -2,6 +2,35 @@
 
 All notable changes to Lost Cities: Road Fixes are documented here.
 
+## 1.1.0+mc1.21.1 — 2026-07-15
+
+### Interchanges
+
+- Rebuilds full cloverleafs as four independent loop ramps plus four independent
+  outer ramps instead of collapsing turns onto shared paths.
+- Adds a continuous auxiliary lane in every built-in mainline direction, with
+  gradual 32-block lane-add/lane-drop tapers and staggered ramp terminals.
+- Rejects at-grade interior ramp conflicts and gives stack connectors a clear
+  central structure tier above or below both mainlines.
+- Corrects every built-in's advertised minimum approach to include its complete
+  terminal geometry.
+- Diversifies long four-way sites deterministically across SPUI, partial
+  cloverleaf, single-quadrant, diamond, cloverleaf, and stack families.
+
+### Buildings
+
+- Prevents Lost Cities from generating a building or any section of a
+  multi-building where it would touch a final road/interchange surface.
+- Reserves one complete chunk of clearance around the full road footprint and
+  reports suppressed building chunks in operator diagnostics.
+
+### Validation
+
+- Adds source-backed topology, terminal, taper, grade-separation, selection,
+  and building-footprint regressions.
+- Revalidates the client's exact seed and modpack from empty region files; both
+  level-0/level-3 crossings at `(-80, 96)` and `(-80, 104)` are connected.
+
 ## 1.0.1+mc1.21.1 — 2026-07-15
 
 ### Fixed

@@ -26,6 +26,13 @@ public final class RuntimeRoadRenderPipeline {
             Collection<PlannedInterchangeGeometry> interchanges,
             Consumer<ChunkRoadSurface> writer) {
         Objects.requireNonNull(writer, "writer").accept(
-                composer.compose(targetChunk, nativeRoads, interchanges));
+                compose(targetChunk, nativeRoads, interchanges));
+    }
+
+    public ChunkRoadSurface compose(
+            ChunkPoint targetChunk,
+            Collection<ElevatedRoadTile> nativeRoads,
+            Collection<PlannedInterchangeGeometry> interchanges) {
+        return composer.compose(targetChunk, nativeRoads, interchanges);
     }
 }
