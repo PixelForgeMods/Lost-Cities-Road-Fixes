@@ -33,7 +33,7 @@ class InterchangeConflictResolverTest {
         ConflictedRoadCrossing conflict = resolution.conflicts().getFirst();
         assertEquals(blocked.crossing(), conflict.crossing());
         assertEquals(winner.crossing().chunk(), conflict.blockingCrossing());
-        assertEquals(256, conflict.minimumCenterSeparationBlocks());
+        assertEquals(224, conflict.minimumCenterSeparationBlocks());
         assertTrue(conflict.diagnostic().contains("chunk 0,0"));
     }
 
@@ -96,7 +96,7 @@ class InterchangeConflictResolverTest {
 
     @Test
     void surveyHaloCoversTheLargestSelectableCorePair() {
-        assertEquals(18, RESOLVER.surveyMarginChunks());
+        assertEquals(34, RESOLVER.surveyMarginChunks());
     }
 
     private static PlannedInterchange candidate(ChunkPoint chunk, long seed) {
@@ -114,12 +114,12 @@ class InterchangeConflictResolverTest {
                 0,
                 1,
                 EnumSet.allOf(ApproachDirection.class),
+                512,
                 256,
-                128,
                 4,
                 demand,
                 4,
-                true,
+                false,
                 requireFreeFlow,
                 new CrossingDecks(
                         new HalfBlockElevation(140),

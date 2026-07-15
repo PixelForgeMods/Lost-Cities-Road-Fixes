@@ -42,7 +42,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
 public final class RoadGenerationRuntime {
-    private static final int MAXIMUM_INTERCHANGE_APPROACH_BLOCKS = 256;
+    private static final int MAXIMUM_INTERCHANGE_APPROACH_BLOCKS = 512;
     private static final RoadDesignStandard ROAD_STANDARD = RoadDesignStandard.DEFAULT;
     private static final RuntimePlanCaches<RegionalRoadPlan, RegionalInterchangeGeometryPlan>
             PLAN_CACHES = new RuntimePlanCaches<>();
@@ -321,7 +321,8 @@ public final class RoadGenerationRuntime {
             LostCityProfile profile,
             String designFingerprint,
             RoadOperationalSettings settings) {
-        return "runtime-interchanges-v2|dense-core-reservations-v1|"
+        return "runtime-interchanges-v3|professional-terminals-v1|site-envelope-v1|"
+                + "dense-core-reservations-v1|"
                 + roadRulesFingerprint(profile, settings)
                 + '|'
                 + designFingerprint;

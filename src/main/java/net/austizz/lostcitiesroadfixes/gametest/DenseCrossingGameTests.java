@@ -41,7 +41,7 @@ public final class DenseCrossingGameTests {
                 || resolution.conflicts().size() != 1
                 || !resolution.conflicts().getFirst().blockingCrossing()
                         .equals(winner.crossing().chunk())
-                || resolver.surveyMarginChunks() != 18) {
+                || resolver.surveyMarginChunks() != 34) {
             helper.fail("Dense interchange cores did not use the bounded stable winner");
             return;
         }
@@ -55,12 +55,12 @@ public final class DenseCrossingGameTests {
                 0,
                 1,
                 EnumSet.allOf(ApproachDirection.class),
+                512,
                 256,
-                128,
                 4,
                 TrafficDemand.HIGH,
                 4,
-                true,
+                false,
                 true,
                 new CrossingDecks(
                         new HalfBlockElevation(140),

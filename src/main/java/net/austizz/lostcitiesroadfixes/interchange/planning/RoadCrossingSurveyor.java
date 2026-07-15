@@ -15,7 +15,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 public final class RoadCrossingSurveyor {
-    public static final int MAXIMUM_RADIUS_BLOCKS = 128;
+    public static final int MAXIMUM_RADIUS_BLOCKS = 256;
 
     private final int maximumApproachBlocks;
     private final int maximumArmChunks;
@@ -62,19 +62,21 @@ public final class RoadCrossingSurveyor {
                 ? JunctionForm.THREE_WAY
                 : JunctionForm.FOUR_WAY;
         int approach = armRuns.values().stream().mapToInt(Integer::intValue).min().orElseThrow();
-        int radius = Math.min(MAXIMUM_RADIUS_BLOCKS, Math.max(1, approach / 2));
-        TrafficDemand demand = approach >= 192
-                ? TrafficDemand.HIGH
-                : approach >= 128 ? TrafficDemand.REGIONAL : TrafficDemand.LOCAL;
-        int maximumLevels = radius >= 96 ? 4 : radius >= 64 ? 3 : 2;
-        boolean loopsAllowed = radius >= 64;
-        boolean requireFreeFlow = demand == TrafficDemand.HIGH;
+        int radius = Math.min(MAXIMUM_RADIUS_BLOCKS, Math.max(1, approach * 3 / 4));
         CrossingDecks decks = elevations.planDecks(xRoad.get().level(), zRoad.get().level());
         int separationHalfBlocks = decks.upperPlannedDeck().halfBlocks()
                 - decks.lowerPlannedDeck().halfBlocks();
         if (separationHalfBlocks < standard.minimumVehicleClearanceBlocks() * 2) {
             throw new IllegalStateException("Planned crossing does not provide vehicle clearance");
         }
+        long selectionSeed = siteSeed(
+                worldSeed, chunk, xRoad.get().level(), zRoad.get().level());
+        SiteEnvelope envelope = siteEnvelope(
+                form,
+                selectionSeed,
+                approach,
+                radius,
+                separationHalfBlocks > standard.preferredDeckSeparationBlocks() * 2);
 
         return Optional.of(new DetectedRoadCrossing(
                 chunk,
@@ -84,13 +86,47 @@ public final class RoadCrossingSurveyor {
                 EnumSet.copyOf(armRuns.keySet()),
                 approach,
                 radius,
-                form == JunctionForm.FOUR_WAY ? 4 : 3,
-                demand,
-                maximumLevels,
-                loopsAllowed,
-                requireFreeFlow,
+                envelope.availableQuadrants(),
+                envelope.demand(),
+                envelope.maximumStructureLevels(),
+                envelope.loopRampsAllowed(),
+                envelope.requireAllMovementsFreeFlow(),
                 decks,
-                siteSeed(worldSeed, chunk, xRoad.get().level(), zRoad.get().level())));
+                selectionSeed));
+    }
+
+    private static SiteEnvelope siteEnvelope(
+            JunctionForm form,
+            long selectionSeed,
+            int approachRunBlocks,
+            int radiusBlocks,
+            boolean unusuallyLargeDeckSeparation) {
+        if (form == JunctionForm.THREE_WAY) {
+            return Long.remainderUnsigned(selectionSeed, 2L) == 0L
+                    ? new SiteEnvelope(2, TrafficDemand.REGIONAL, 2, true, true)
+                    : new SiteEnvelope(3, TrafficDemand.HIGH, 3, false, true);
+        }
+        if (unusuallyLargeDeckSeparation) {
+            return approachRunBlocks >= 512
+                    ? new SiteEnvelope(4, TrafficDemand.HIGH, 4, false, true)
+                    : new SiteEnvelope(2, TrafficDemand.HIGH, 2, true, false);
+        }
+        int bucket = (int) Long.remainderUnsigned(selectionSeed, 6L);
+        if (bucket == 4 && (approachRunBlocks < 320 || radiusBlocks < 224)) {
+            bucket = 5;
+        }
+        if (bucket == 5 && approachRunBlocks < 512) {
+            bucket = 0;
+        }
+        return switch (bucket) {
+            case 0 -> new SiteEnvelope(1, TrafficDemand.HIGH, 2, false, false);
+            case 1 -> new SiteEnvelope(2, TrafficDemand.HIGH, 2, true, false);
+            case 2 -> new SiteEnvelope(1, TrafficDemand.LOCAL, 2, false, false);
+            case 3 -> new SiteEnvelope(2, TrafficDemand.REGIONAL, 2, false, false);
+            case 4 -> new SiteEnvelope(4, TrafficDemand.HIGH, 2, true, true);
+            case 5 -> new SiteEnvelope(4, TrafficDemand.HIGH, 4, false, true);
+            default -> throw new IllegalStateException("Unreachable site-envelope bucket");
+        };
     }
 
     private int armRun(
@@ -131,5 +167,13 @@ public final class RoadCrossingSurveyor {
         value = (value ^ (value >>> 30)) * 0xbf58476d1ce4e5b9L;
         value = (value ^ (value >>> 27)) * 0x94d049bb133111ebL;
         return value ^ (value >>> 31);
+    }
+
+    private record SiteEnvelope(
+            int availableQuadrants,
+            TrafficDemand demand,
+            int maximumStructureLevels,
+            boolean loopRampsAllowed,
+            boolean requireAllMovementsFreeFlow) {
     }
 }

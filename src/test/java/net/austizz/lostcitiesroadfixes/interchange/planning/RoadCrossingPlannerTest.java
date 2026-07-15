@@ -5,6 +5,8 @@ import net.austizz.lostcitiesroadfixes.interchange.InterchangeType;
 import net.austizz.lostcitiesroadfixes.interchange.JunctionForm;
 import net.austizz.lostcitiesroadfixes.interchange.TrafficDemand;
 import net.austizz.lostcitiesroadfixes.interchange.layout.ApproachDirection;
+import net.austizz.lostcitiesroadfixes.interchange.layout.InterchangeLayoutFactory;
+import net.austizz.lostcitiesroadfixes.interchange.render.InterchangeGeometryPlanner;
 import net.austizz.lostcitiesroadfixes.planning.RoadPlanKey;
 import net.austizz.lostcitiesroadfixes.planning.continuity.ChunkBounds;
 import net.austizz.lostcitiesroadfixes.planning.continuity.RoadAxis;
@@ -19,9 +21,12 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -43,8 +48,8 @@ class RoadCrossingPlannerTest {
         assertEquals(JunctionForm.FOUR_WAY, crossing.form());
         assertEquals(4, crossing.approaches().size());
         assertEquals(256, crossing.approachRunBlocks());
-        assertEquals(128, crossing.availableRadiusBlocks());
-        assertEquals(TrafficDemand.HIGH, crossing.demand());
+        assertEquals(192, crossing.availableRadiusBlocks());
+        assertEquals(TrafficDemand.LOCAL, crossing.demand());
         assertEquals(new HalfBlockElevation(140), crossing.decks().nativeX());
         assertEquals(new HalfBlockElevation(152), crossing.decks().nativeZ());
         assertEquals(new HalfBlockElevation(140), crossing.decks().plannedX());
@@ -100,7 +105,7 @@ class RoadCrossingPlannerTest {
                 key, crossingOnly, lookup(steepRoads), ELEVATIONS);
 
         assertEquals(1, feasible.interchanges().size());
-        assertEquals(InterchangeType.CLOVERLEAF,
+        assertEquals(InterchangeType.SINGLE_QUADRANT,
                 feasible.interchanges().getFirst().decision().selected().orElseThrow().type());
         assertTrue(feasible.rejectedCrossings().isEmpty());
 
@@ -112,20 +117,56 @@ class RoadCrossingPlannerTest {
 
     @Test
     void selectsDriveableInterchangeForReportedEighteenBlockCrossing() {
-        Map<RoadTileKey, RoadTile> roads = crossing(new ChunkPoint(0, 0), 16, 0, 3, false);
+        Map<RoadTileKey, RoadTile> roads = crossing(new ChunkPoint(0, 0), 32, 0, 3, false);
         RoadPlanKey key = keyFor(new ChunkPoint(0, 0));
         ChunkBounds crossingOnly = new ChunkBounds(0, 0, 0, 0);
 
-        RegionalInterchangePlan plan = planner(256).plan(
+        RegionalInterchangePlan plan = planner(512).plan(
                 key, crossingOnly, lookup(roads), ELEVATIONS);
 
         assertEquals(1, plan.interchanges().size(), () ->
                 plan.rejectedCrossings().isEmpty()
                         ? plan.conflictedCrossings().toString()
                         : plan.rejectedCrossings().getFirst().decision().diagnostic());
-        assertEquals(InterchangeType.CLOVERLEAF,
+        assertEquals(InterchangeType.STACK,
                 plan.interchanges().getFirst().decision().selected().orElseThrow().type());
         assertTrue(plan.rejectedCrossings().isEmpty());
+    }
+
+    @Test
+    void longFourWayRoadsSelectAndCompileEveryFourWayFamily() {
+        Map<RoadTileKey, RoadTile> roads = crossing(new ChunkPoint(0, 0), 32, 0, 1, false);
+        RoadCrossingSurveyor surveyor = new RoadCrossingSurveyor(512, STANDARD);
+        InterchangeSelector selector = InterchangeSelector.withBuiltIns();
+        Set<InterchangeType> selected = EnumSet.noneOf(InterchangeType.class);
+        Map<InterchangeType, PlannedInterchange> firstOfEachFamily =
+                new EnumMap<>(InterchangeType.class);
+
+        for (long seed = 0; seed < 512; seed++) {
+            DetectedRoadCrossing crossing = surveyor.survey(
+                    new ChunkPoint(0, 0), lookup(roads), ELEVATIONS, seed).orElseThrow();
+            var decision = selector.select(crossing.selectionSite());
+            decision.selected().ifPresent(design -> {
+                selected.add(design.type());
+                firstOfEachFamily.putIfAbsent(
+                        design.type(), new PlannedInterchange(crossing, decision));
+            });
+        }
+
+        Set<InterchangeType> expected = EnumSet.of(
+                InterchangeType.SPUI,
+                InterchangeType.PARTIAL_CLOVERLEAF,
+                InterchangeType.SINGLE_QUADRANT,
+                InterchangeType.DIAMOND,
+                InterchangeType.CLOVERLEAF,
+                InterchangeType.STACK);
+        assertEquals(expected, selected);
+
+        InterchangeGeometryPlanner geometryPlanner = new InterchangeGeometryPlanner(
+                new InterchangeLayoutFactory(STANDARD));
+        firstOfEachFamily.forEach((type, plan) -> assertEquals(
+                type,
+                geometryPlanner.create(plan).layout().design().type()));
     }
 
     @Test
@@ -167,13 +208,13 @@ class RoadCrossingPlannerTest {
     @Test
     void denseEightChunkCrossingsProduceOneSafeCoreAndOneConflict() {
         ChunkPoint firstCrossing = new ChunkPoint(0, 0);
-        ChunkPoint secondCrossing = new ChunkPoint(8, 0);
+        ChunkPoint secondCrossing = new ChunkPoint(4, 0);
         Map<RoadTileKey, RoadTile> roads = crossing(firstCrossing, 16, 0, 1, false);
         roads.putAll(crossing(secondCrossing, 16, 0, 1, false));
 
         RegionalInterchangePlan plan = planner(256).plan(
                 keyFor(firstCrossing),
-                new ChunkBounds(0, 8, 0, 0),
+                new ChunkBounds(0, 4, 0, 0),
                 lookup(roads),
                 ELEVATIONS);
 
