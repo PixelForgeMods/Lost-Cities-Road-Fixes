@@ -37,7 +37,15 @@ class InterchangeSelectorTest {
         assertSelected(InterchangeType.TRUMPET,
                 site(JunctionForm.THREE_WAY, 80, 2, TrafficDemand.REGIONAL, 2, true, true));
         assertSelected(InterchangeType.THREE_WAY_DIRECTIONAL,
-                site(JunctionForm.THREE_WAY, 128, 4, TrafficDemand.HIGH, 3, false, true));
+                site(
+                        JunctionForm.THREE_WAY,
+                        128,
+                        4,
+                        TrafficDemand.HIGH,
+                        3,
+                        false,
+                        true,
+                        168));
         assertSelected(InterchangeType.SPUI,
                 site(JunctionForm.FOUR_WAY, 48, 1, TrafficDemand.HIGH, 2, false, false));
         assertSelected(InterchangeType.PARTIAL_CLOVERLEAF,
@@ -49,7 +57,68 @@ class InterchangeSelectorTest {
         assertSelected(InterchangeType.CLOVERLEAF,
                 site(JunctionForm.FOUR_WAY, 256, 4, TrafficDemand.HIGH, 2, true, true));
         assertSelected(InterchangeType.STACK,
-                site(JunctionForm.FOUR_WAY, 128, 4, TrafficDemand.HIGH, 4, false, true));
+                site(
+                        JunctionForm.FOUR_WAY,
+                        128,
+                        4,
+                        TrafficDemand.HIGH,
+                        4,
+                        false,
+                        true,
+                        188));
+    }
+
+    @Test
+    void lowGapRegionalCrossingSelectsDiamondAndRejectsFourLevelStack() {
+        InterchangeSite site = site(
+                JunctionForm.FOUR_WAY,
+                128,
+                4,
+                TrafficDemand.REGIONAL,
+                4,
+                true,
+                false);
+
+        InterchangeDecision decision = selector.select(site);
+
+        assertEquals(InterchangeType.DIAMOND,
+                decision.selected().orElseThrow().type(), decision::diagnostic);
+        assertEquals(192, decision.selectedApproachRunBlocks());
+        InterchangeEvaluation stack = decision.evaluations().stream()
+                .filter(evaluation -> evaluation.design().type() == InterchangeType.STACK)
+                .findFirst()
+                .orElseThrow();
+        assertTrue(stack.rejectionReasons().stream()
+                .anyMatch(reason -> reason.contains("four physical levels")),
+                decision::diagnostic);
+    }
+
+    @Test
+    void selectionDoesNotChangeWhenOnlyTheSeedChanges() {
+        InterchangeSite first = site(
+                JunctionForm.FOUR_WAY,
+                128,
+                4,
+                TrafficDemand.HIGH,
+                3,
+                true,
+                false,
+                176,
+                1L);
+        InterchangeSite second = site(
+                JunctionForm.FOUR_WAY,
+                128,
+                4,
+                TrafficDemand.HIGH,
+                3,
+                true,
+                false,
+                176,
+                Long.MAX_VALUE);
+
+        assertEquals(
+                selector.select(first).selected(),
+                selector.select(second).selected());
     }
 
     @Test
@@ -97,6 +166,7 @@ class InterchangeSelectorTest {
 
     private void assertSelected(InterchangeType expected, InterchangeSite site) {
         InterchangeDecision decision = selector.select(site);
+        assertTrue(decision.selected().isPresent(), decision::diagnostic);
         assertEquals(expected, decision.selected().orElseThrow().type(), decision::diagnostic);
     }
 
@@ -108,17 +178,59 @@ class InterchangeSelectorTest {
             int levels,
             boolean loopsAllowed,
             boolean requireFreeFlow) {
+        return site(
+                form,
+                radius,
+                quadrants,
+                demand,
+                levels,
+                loopsAllowed,
+                requireFreeFlow,
+                160);
+    }
+
+    private static InterchangeSite site(
+            JunctionForm form,
+            int radius,
+            int quadrants,
+            TrafficDemand demand,
+            int levels,
+            boolean loopsAllowed,
+            boolean requireFreeFlow,
+            int upperHalfBlocks) {
+        return site(
+                form,
+                radius,
+                quadrants,
+                demand,
+                levels,
+                loopsAllowed,
+                requireFreeFlow,
+                upperHalfBlocks,
+                0x5eedL);
+    }
+
+    private static InterchangeSite site(
+            JunctionForm form,
+            int radius,
+            int quadrants,
+            TrafficDemand demand,
+            int levels,
+            boolean loopsAllowed,
+            boolean requireFreeFlow,
+            int upperHalfBlocks,
+            long seed) {
         return new InterchangeSite(
                 form,
                 radius,
                 quadrants,
                 640,
                 new HalfBlockElevation(140),
-                new HalfBlockElevation(160),
+                new HalfBlockElevation(upperHalfBlocks),
                 demand,
                 levels,
                 loopsAllowed,
                 requireFreeFlow,
-                0x5eedL);
+                seed);
     }
 }

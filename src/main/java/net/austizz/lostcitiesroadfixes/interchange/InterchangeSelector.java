@@ -1,6 +1,9 @@
 package net.austizz.lostcitiesroadfixes.interchange;
 
 import net.austizz.lostcitiesroadfixes.planning.elevation.GradeProfilePlanner;
+import net.austizz.lostcitiesroadfixes.interchange.geometry.PlanarPoint;
+import net.austizz.lostcitiesroadfixes.interchange.layout.InterchangeGeometrySite;
+import net.austizz.lostcitiesroadfixes.interchange.layout.InterchangeLayoutFactory;
 import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
 
 import java.util.ArrayList;
@@ -14,12 +17,14 @@ import java.util.Optional;
 public final class InterchangeSelector {
     private final List<InterchangeDesign> designs;
     private final GradeProfilePlanner gradePlanner;
+    private final InterchangeLayoutFactory layoutFactory;
     private final RoadDesignStandard standard;
 
     public InterchangeSelector(List<InterchangeDesign> designs, RoadDesignStandard standard) {
         Objects.requireNonNull(designs, "designs");
         this.standard = Objects.requireNonNull(standard, "standard");
         this.gradePlanner = new GradeProfilePlanner(standard);
+        this.layoutFactory = new InterchangeLayoutFactory(standard);
 
         Map<InterchangeDesignId, InterchangeDesign> byId = new HashMap<>();
         for (InterchangeDesign design : designs) {
@@ -49,9 +54,6 @@ public final class InterchangeSelector {
                 .min(Comparator
                         .comparingInt((InterchangeEvaluation evaluation) ->
                                 evaluation.score().orElseThrow())
-                        .thenComparing((left, right) -> Long.compareUnsigned(
-                                tieKey(site.selectionSeed(), left.design()),
-                                tieKey(site.selectionSeed(), right.design())))
                         .thenComparing(evaluation -> evaluation.design().id()))
                 .map(InterchangeEvaluation::design);
 
@@ -60,6 +62,7 @@ public final class InterchangeSelector {
 
     private InterchangeEvaluation evaluate(InterchangeDesign design, InterchangeSite site) {
         List<String> reasons = new ArrayList<>();
+        int compiledApproach = -1;
         if (design.form() != site.form()) {
             reasons.add("requires a " + design.form() + " junction");
         }
@@ -103,6 +106,15 @@ public final class InterchangeSelector {
         if (design.structureLevels() > site.maximumStructureLevels()) {
             reasons.add("requires " + design.structureLevels() + " structure levels");
         }
+        int physicalLevelSpan = Math.multiplyExact(
+                design.structureLevels() - 1, minimumClearanceHalfBlocks);
+        if (separationHalfBlocks < physicalLevelSpan) {
+            reasons.add(design.type() == InterchangeType.STACK
+                    ? "four physical levels require " + physicalLevelSpan / 2.0
+                            + " blocks between the mainline decks"
+                    : design.structureLevels() + " physical levels require "
+                            + physicalLevelSpan / 2.0 + " blocks between the mainline decks");
+        }
         if (design.usesLoopRamps() && !site.loopRampsAllowed()) {
             reasons.add("requires loop-ramp space");
         }
@@ -110,34 +122,89 @@ public final class InterchangeSelector {
             reasons.add("does not provide all free-flow movements");
         }
 
-        return reasons.isEmpty()
-                ? InterchangeEvaluation.feasible(design, score(design, site))
-                : InterchangeEvaluation.rejected(design, reasons);
+        if (reasons.isEmpty()) {
+            CandidateCompilation compilation = compile(design, site);
+            if (!compilation.feasible()) {
+                reasons.add("geometry rejected: " + compilation.failure());
+            } else {
+                compiledApproach = compilation.approachRunBlocks();
+            }
+        }
+
+        if (!reasons.isEmpty()) {
+            return InterchangeEvaluation.rejected(design, reasons);
+        }
+        int footprintRadius = Math.addExact(
+                design.minimumRadiusBlocks(),
+                Math.floorDiv(standard.arterialCrossSection().totalWidthBlocks(), 2));
+        int displacedBuildings = site.environment().displacedBuildings(footprintRadius);
+        return InterchangeEvaluation.feasible(
+                design,
+                score(design, site, compiledApproach, displacedBuildings),
+                compiledApproach,
+                displacedBuildings);
     }
 
-    private static int score(InterchangeDesign design, InterchangeSite site) {
+    private CandidateCompilation compile(InterchangeDesign design, InterchangeSite site) {
+        int firstApproach = roundUpToChunk(design.minimumApproachRunBlocks());
+        String lastFailure = "no chunk-aligned approach length is available";
+        for (int approach = firstApproach;
+                approach <= site.approachRunBlocks();
+                approach = Math.addExact(approach, 16)) {
+            try {
+                layoutFactory.create(design, new InterchangeGeometrySite(
+                        new PlanarPoint(0.0, 0.0),
+                        approach,
+                        site.xRoadNativeElevation(),
+                        site.zRoadNativeElevation(),
+                        site.xRoadCenterElevation(),
+                        site.zRoadCenterElevation()));
+                return CandidateCompilation.feasible(approach);
+            } catch (IllegalArgumentException exception) {
+                lastFailure = exception.getMessage();
+            }
+        }
+        return CandidateCompilation.rejected(lastFailure);
+    }
+
+    private static int roundUpToChunk(int blocks) {
+        return Math.multiplyExact(Math.floorDiv(Math.addExact(blocks, 15), 16), 16);
+    }
+
+    private static int score(
+            InterchangeDesign design,
+            InterchangeSite site,
+            int compiledApproach,
+            int displacedBuildings) {
         int capacitySlack = design.capacity().excessCapacityOver(site.demand());
         int quadrantSlack = site.availableQuadrants() - design.requiredQuadrants();
-        int radiusSlack = site.availableRadiusBlocks() - design.minimumRadiusBlocks();
-        int levelSlack = site.maximumStructureLevels() - design.structureLevels();
+        int operationalPenalty = site.demand() == TrafficDemand.HIGH
+                && !design.allMovementsFreeFlow() ? 20_000 : 0;
+        int verticalWork = design.structureLevels() - 1;
 
-        return capacitySlack * 10_000
-                + quadrantSlack * 1_000
-                + radiusSlack * 10
-                + levelSlack * 100
-                + design.constructionComplexity() * 50;
+        return Math.addExact(
+                Math.multiplyExact(displacedBuildings, 1_000_000),
+                capacitySlack * 100_000
+                        + quadrantSlack * 5_000
+                        + operationalPenalty
+                        + verticalWork * 1_000
+                        + design.minimumRadiusBlocks() * 10
+                        + compiledApproach
+                        + design.constructionComplexity() * 50);
     }
 
-    private static long tieKey(long seed, InterchangeDesign design) {
-        long idHash = 0xcbf29ce484222325L;
-        String id = design.id().toString();
-        for (int index = 0; index < id.length(); index++) {
-            idHash ^= id.charAt(index);
-            idHash *= 0x100000001b3L;
+    private record CandidateCompilation(int approachRunBlocks, String failure) {
+        private static CandidateCompilation feasible(int approachRunBlocks) {
+            return new CandidateCompilation(approachRunBlocks, null);
         }
-        long value = seed ^ idHash;
-        value = (value ^ (value >>> 30)) * 0xbf58476d1ce4e5b9L;
-        value = (value ^ (value >>> 27)) * 0x94d049bb133111ebL;
-        return value ^ (value >>> 31);
+
+        private static CandidateCompilation rejected(String failure) {
+            return new CandidateCompilation(-1, Objects.requireNonNull(failure, "failure"));
+        }
+
+        private boolean feasible() {
+            return failure == null;
+        }
     }
+
 }

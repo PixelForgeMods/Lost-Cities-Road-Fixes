@@ -314,7 +314,10 @@ public final class RoadGenerationRuntime {
                 LostCityTerrainFeature.FLOORHEIGHT,
                 ROAD_STANDARD);
         InterchangeRegionalPlanner planner = new InterchangeRegionalPlanner(
-                new RoadCrossingSurveyor(MAXIMUM_INTERCHANGE_APPROACH_BLOCKS, ROAD_STANDARD),
+                new RoadCrossingSurveyor(
+                        MAXIMUM_INTERCHANGE_APPROACH_BLOCKS,
+                        ROAD_STANDARD,
+                        new LostCitiesCrossingEnvironmentLookup(provider)),
                 new InterchangeSelector(designs, ROAD_STANDARD),
                 new InterchangeConflictResolver(ROAD_STANDARD));
         RegionalInterchangePlan selected = planner.plan(key, roadLookup, elevations);

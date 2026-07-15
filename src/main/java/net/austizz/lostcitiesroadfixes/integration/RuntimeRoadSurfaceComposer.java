@@ -1,12 +1,13 @@
 package net.austizz.lostcitiesroadfixes.integration;
 
-import net.austizz.lostcitiesroadfixes.interchange.render.ChunkRoadSurfaceMerger;
 import net.austizz.lostcitiesroadfixes.interchange.render.InterchangeSurfaceRasterizer;
 import net.austizz.lostcitiesroadfixes.interchange.render.PlannedInterchangeGeometry;
+import net.austizz.lostcitiesroadfixes.interchange.render.VerticalClearanceSurfaceMerger;
 import net.austizz.lostcitiesroadfixes.render.ChunkRoadSurface;
 import net.austizz.lostcitiesroadfixes.render.ElevatedRoadTile;
 import net.austizz.lostcitiesroadfixes.render.RoadSurfaceRasterizer;
 import net.austizz.lostcitiesroadfixes.road.ChunkPoint;
+import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
 
 import java.util.Collection;
 import java.util.List;
@@ -16,7 +17,9 @@ public final class RuntimeRoadSurfaceComposer {
     private final RoadSurfaceRasterizer roadRasterizer = new RoadSurfaceRasterizer();
     private final InterchangeSurfaceRasterizer interchangeRasterizer =
             new InterchangeSurfaceRasterizer();
-    private final ChunkRoadSurfaceMerger merger = new ChunkRoadSurfaceMerger();
+    private final VerticalClearanceSurfaceMerger protectedInterchangeMerger =
+            new VerticalClearanceSurfaceMerger(
+                    RoadDesignStandard.DEFAULT.minimumVehicleClearanceBlocks());
 
     public ChunkRoadSurface compose(
             ChunkPoint targetChunk,
@@ -33,8 +36,9 @@ public final class RuntimeRoadSurfaceComposer {
                         .filter(cell -> geometry.stream().noneMatch(interchange ->
                                 interchange.replacesNativeCell(cell.position())))
                         .toList());
-        return merger.merge(targetChunk, List.of(
-                unaffectedSurface,
-                interchangeRasterizer.rasterize(targetChunk, geometry)));
+        ChunkRoadSurface interchangeSurface = interchangeRasterizer.rasterize(
+                targetChunk, geometry);
+        return protectedInterchangeMerger.merge(
+                targetChunk, unaffectedSurface, interchangeSurface);
     }
 }

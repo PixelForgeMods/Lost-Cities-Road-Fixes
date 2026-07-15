@@ -1,6 +1,6 @@
 # ADR-0019: Model professional ramp terminals and full cloverleaf topology
 
-Status: Accepted
+Status: Superseded in part by [ADR-0022](adr-0022-monotonic-shared-ramp-and-clearance-envelopes.md)
 
 ## Context
 

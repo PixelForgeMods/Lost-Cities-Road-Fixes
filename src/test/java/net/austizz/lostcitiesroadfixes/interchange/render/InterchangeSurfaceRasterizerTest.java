@@ -15,7 +15,6 @@ import net.austizz.lostcitiesroadfixes.interchange.planning.PlannedInterchange;
 import net.austizz.lostcitiesroadfixes.planning.continuity.RoadAxis;
 import net.austizz.lostcitiesroadfixes.render.ChunkRoadSurface;
 import net.austizz.lostcitiesroadfixes.render.ElevatedRoadTile;
-import net.austizz.lostcitiesroadfixes.render.MinecraftRoadWriter;
 import net.austizz.lostcitiesroadfixes.render.RoadSurfaceCell;
 import net.austizz.lostcitiesroadfixes.render.RoadSurfacePosition;
 import net.austizz.lostcitiesroadfixes.render.RoadSurfaceRole;
@@ -104,9 +103,9 @@ class InterchangeSurfaceRasterizerTest {
         ChunkRoadSurface fullWidth = rasterizer.rasterize(
                 new ChunkPoint(-18, 1), List.of(geometry));
 
-        assertFalse(start.cellAt(-312, 24, elevation(140)).isPresent());
-        assertTrue(middle.cellAt(-296, 24, elevation(140)).isPresent());
-        assertTrue(fullWidth.cellAt(-280, 24, elevation(140)).isPresent());
+        assertFalse(start.cellAt(-312, 25, elevation(140)).isPresent());
+        assertTrue(middle.cellAt(-296, 25, elevation(140)).isPresent());
+        assertTrue(fullWidth.cellAt(-280, 25, elevation(140)).isPresent());
     }
 
     @Test
@@ -143,8 +142,8 @@ class InterchangeSurfaceRasterizerTest {
         ChunkRoadSurface center = new GradedArterialRasterizer().rasterize(
                 new ChunkPoint(0, 0), geometry.arterials());
         assertTrue(north.cells().stream().noneMatch(cell ->
-                cell.position().elevation().equals(elevation(160))));
-        assertTrue(center.cellAt(8, 8, elevation(160)).isPresent());
+                cell.position().elevation().equals(elevation(168))));
+        assertTrue(center.cellAt(8, 8, elevation(168)).isPresent());
     }
 
     @Test
@@ -220,7 +219,8 @@ class InterchangeSurfaceRasterizerTest {
                 true,
                 true,
                 new CrossingDecks(
-                        elevation(140), elevation(152), elevation(140), elevation(160)),
+                        elevation(140), elevation(152), elevation(140),
+                        threeWay ? elevation(168) : elevation(160)),
                 0x5eedL);
         InterchangeDecision decision = InterchangeSelector.withBuiltIns()
                 .select(crossing.selectionSite());
@@ -244,7 +244,7 @@ class InterchangeSurfaceRasterizerTest {
                 TrafficDemand.HIGH,
                 4,
                 true,
-                true,
+                false,
                 new CrossingDecks(nativeX, nativeZ, plannedX, plannedZ),
                 0x5eedL);
         InterchangeDecision decision = InterchangeSelector.withBuiltIns()
@@ -253,7 +253,7 @@ class InterchangeSurfaceRasterizerTest {
     }
 
     private static boolean hasVerticalConflict(List<RoadSurfaceCell> column) {
-        int clearanceHalfBlocks = MinecraftRoadWriter.HEADROOM_BLOCKS * 2;
+        int clearanceHalfBlocks = STANDARD.minimumVehicleClearanceBlocks() * 2;
         for (int left = 0; left < column.size(); left++) {
             for (int right = left + 1; right < column.size(); right++) {
                 int delta = StrictMath.abs(

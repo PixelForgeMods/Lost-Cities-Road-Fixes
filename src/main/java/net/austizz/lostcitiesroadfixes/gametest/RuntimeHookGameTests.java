@@ -101,6 +101,48 @@ public final class RuntimeHookGameTests {
     }
 
     @GameTest(template = "empty3x3x3", timeoutTicks = 20)
+    public static void minecraftWriterCarvesATallRoundedTunnelEnvelope(GameTestHelper helper) {
+        BlockPos left = new BlockPos(0, 1, 1);
+        BlockPos center = new BlockPos(1, 1, 1);
+        BlockPos right = new BlockPos(2, 1, 1);
+        helper.setBlock(left.above(8), Blocks.STONE);
+        helper.setBlock(left.above(9), Blocks.STONE);
+        helper.setBlock(center.above(11), Blocks.STONE);
+        helper.setBlock(center.above(12), Blocks.STONE);
+        helper.setBlock(right.above(8), Blocks.STONE);
+        helper.setBlock(right.above(9), Blocks.STONE);
+
+        BlockPos absoluteLeft = helper.absolutePos(left);
+        BlockPos absoluteCenter = helper.absolutePos(center);
+        BlockPos absoluteRight = helper.absolutePos(right);
+        ChunkPoint chunk = new ChunkPoint(absoluteCenter.getX() >> 4, absoluteCenter.getZ() >> 4);
+        HalfBlockElevation elevation = HalfBlockElevation.ofWholeBlocks(absoluteCenter.getY());
+        ChunkRoadSurface surface = new ChunkRoadSurface(chunk, List.of(
+                new RoadSurfaceCell(
+                        new RoadSurfacePosition(
+                                absoluteLeft.getX(), absoluteLeft.getZ(), elevation),
+                        RoadSurfaceRole.SHOULDER),
+                new RoadSurfaceCell(
+                        new RoadSurfacePosition(
+                                absoluteCenter.getX(), absoluteCenter.getZ(), elevation),
+                        RoadSurfaceRole.ASPHALT),
+                new RoadSurfaceCell(
+                        new RoadSurfacePosition(
+                                absoluteRight.getX(), absoluteRight.getZ(), elevation),
+                        RoadSurfaceRole.SHOULDER)));
+
+        new MinecraftRoadWriter().write(helper.getLevel().getChunkAt(absoluteCenter), surface);
+
+        helper.assertBlockPresent(Blocks.AIR, left.above(8));
+        helper.assertBlockPresent(Blocks.STONE, left.above(9));
+        helper.assertBlockPresent(Blocks.AIR, center.above(11));
+        helper.assertBlockPresent(Blocks.STONE, center.above(12));
+        helper.assertBlockPresent(Blocks.AIR, right.above(8));
+        helper.assertBlockPresent(Blocks.STONE, right.above(9));
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty3x3x3", timeoutTicks = 20)
     public static void minecraftWriterUsesThemeAndHonorsTheSupportPolicy(GameTestHelper helper) {
         BlockPos supported = new BlockPos(1, 2, 1);
         BlockPos unsupported = new BlockPos(2, 2, 1);

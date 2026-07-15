@@ -25,4 +25,14 @@ public record InterchangeDecision(
                 .collect(Collectors.joining("; "));
         return "Selected " + choice + " for " + site + ": " + details;
     }
+
+    public int selectedApproachRunBlocks() {
+        InterchangeDesign design = selected.orElseThrow();
+        return evaluations.stream()
+                .filter(evaluation -> evaluation.design().equals(design))
+                .findFirst()
+                .orElseThrow()
+                .approachRunBlocks()
+                .orElseThrow();
+    }
 }

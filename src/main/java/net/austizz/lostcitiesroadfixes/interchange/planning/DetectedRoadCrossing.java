@@ -1,6 +1,7 @@
 package net.austizz.lostcitiesroadfixes.interchange.planning;
 
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeSite;
+import net.austizz.lostcitiesroadfixes.interchange.InterchangeEnvironment;
 import net.austizz.lostcitiesroadfixes.interchange.JunctionForm;
 import net.austizz.lostcitiesroadfixes.interchange.TrafficDemand;
 import net.austizz.lostcitiesroadfixes.interchange.layout.ApproachDirection;
@@ -25,13 +26,15 @@ public record DetectedRoadCrossing(
         boolean loopRampsAllowed,
         boolean requireAllMovementsFreeFlow,
         CrossingDecks decks,
-        long selectionSeed) implements Comparable<DetectedRoadCrossing> {
+        long selectionSeed,
+        InterchangeEnvironment environment) implements Comparable<DetectedRoadCrossing> {
     public DetectedRoadCrossing {
         Objects.requireNonNull(chunk, "chunk");
         Objects.requireNonNull(form, "form");
         Objects.requireNonNull(approaches, "approaches");
         Objects.requireNonNull(demand, "demand");
         Objects.requireNonNull(decks, "decks");
+        Objects.requireNonNull(environment, "environment");
         approaches = Collections.unmodifiableSet(EnumSet.copyOf(approaches));
         int expectedApproaches = form == JunctionForm.THREE_WAY ? 3 : 4;
         if (approaches.size() != expectedApproaches) {
@@ -52,6 +55,39 @@ public record DetectedRoadCrossing(
         }
     }
 
+    public DetectedRoadCrossing(
+            ChunkPoint chunk,
+            JunctionForm form,
+            int xLevel,
+            int zLevel,
+            Set<ApproachDirection> approaches,
+            int approachRunBlocks,
+            int availableRadiusBlocks,
+            int availableQuadrants,
+            TrafficDemand demand,
+            int maximumStructureLevels,
+            boolean loopRampsAllowed,
+            boolean requireAllMovementsFreeFlow,
+            CrossingDecks decks,
+            long selectionSeed) {
+        this(
+                chunk,
+                form,
+                xLevel,
+                zLevel,
+                approaches,
+                approachRunBlocks,
+                availableRadiusBlocks,
+                availableQuadrants,
+                demand,
+                maximumStructureLevels,
+                loopRampsAllowed,
+                requireAllMovementsFreeFlow,
+                decks,
+                selectionSeed,
+                InterchangeEnvironment.empty(chunk));
+    }
+
     public InterchangeSite selectionSite() {
         return new InterchangeSite(
                 form,
@@ -64,7 +100,12 @@ public record DetectedRoadCrossing(
                 maximumStructureLevels,
                 loopRampsAllowed,
                 requireAllMovementsFreeFlow,
-                selectionSeed);
+                selectionSeed,
+                environment,
+                decks.nativeX(),
+                decks.nativeZ(),
+                decks.plannedX(),
+                decks.plannedZ());
     }
 
     @Override

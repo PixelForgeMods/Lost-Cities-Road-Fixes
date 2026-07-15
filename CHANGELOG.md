@@ -2,6 +2,30 @@
 
 All notable changes to Lost Cities: Road Fixes are documented here.
 
+## 1.1.1+mc1.21.1 — 2026-07-15
+
+### Ramp geometry
+
+- Makes every built-in ramp and collector 10 blocks wide and gives adjacent
+  branches a full-width lateral separation.
+- Replaces alternating above/below stack tiers with one monotonic half-block
+  grade, including level fork/merge locks and exact graded terminal heights.
+- Shares one collector trunk before stack forks and after stack merges instead
+  of rendering duplicate ramps on top of one another.
+- Keeps full-cloverleaf loops local to their quadrants, nested inside separate
+  outer right-turn ramps without interior at-grade crossings.
+- Moves stack terminals inward only as far as required to establish seven
+  blocks of clearance before a ramp crosses either mainline.
+
+### World compatibility
+
+- Protects interchange geometry from incompatible native road intersections;
+  same-level crossings compose normally and unsafe nearby decks are omitted.
+- Replaces fixed seven-block rectangular carving with an arched tunnel envelope
+  that rises from 8 blocks at the shoulders to 12 over the travel lanes.
+- Preserves planned upper decks while removing low terrain and floating
+  obstructions from the taller vehicle envelope.
+
 ## 1.1.0+mc1.21.1 — 2026-07-15
 
 ### Interchanges

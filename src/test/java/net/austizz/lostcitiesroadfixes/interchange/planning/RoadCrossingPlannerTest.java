@@ -2,6 +2,8 @@ package net.austizz.lostcitiesroadfixes.interchange.planning;
 
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeSelector;
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeType;
+import net.austizz.lostcitiesroadfixes.interchange.InterchangeEnvironment;
+import net.austizz.lostcitiesroadfixes.interchange.InterchangeBuildingFootprint;
 import net.austizz.lostcitiesroadfixes.interchange.JunctionForm;
 import net.austizz.lostcitiesroadfixes.interchange.TrafficDemand;
 import net.austizz.lostcitiesroadfixes.interchange.layout.ApproachDirection;
@@ -49,13 +51,49 @@ class RoadCrossingPlannerTest {
         assertEquals(4, crossing.approaches().size());
         assertEquals(256, crossing.approachRunBlocks());
         assertEquals(192, crossing.availableRadiusBlocks());
-        assertEquals(TrafficDemand.LOCAL, crossing.demand());
+        assertEquals(TrafficDemand.REGIONAL, crossing.demand());
         assertEquals(new HalfBlockElevation(140), crossing.decks().nativeX());
         assertEquals(new HalfBlockElevation(152), crossing.decks().nativeZ());
         assertEquals(new HalfBlockElevation(140), crossing.decks().plannedX());
         assertEquals(new HalfBlockElevation(160), crossing.decks().plannedZ());
         assertEquals(10.0, crossing.selectionSite().upperDeck().blocks()
                 - crossing.selectionSite().lowerDeck().blocks());
+    }
+
+    @Test
+    void surveyedDemandDoesNotChangeWithWorldSeed() {
+        Map<RoadTileKey, RoadTile> roads = crossing(new ChunkPoint(0, 0), 16, 0, 1, false);
+        RoadCrossingSurveyor surveyor = new RoadCrossingSurveyor(256, STANDARD);
+
+        DetectedRoadCrossing first = surveyor.survey(
+                new ChunkPoint(0, 0), lookup(roads), ELEVATIONS, 1L).orElseThrow();
+        DetectedRoadCrossing second = surveyor.survey(
+                new ChunkPoint(0, 0), lookup(roads), ELEVATIONS, Long.MAX_VALUE).orElseThrow();
+
+        assertEquals(first.demand(), second.demand());
+        assertEquals(first.availableQuadrants(), second.availableQuadrants());
+        assertEquals(first.maximumStructureLevels(), second.maximumStructureLevels());
+        assertEquals(first.loopRampsAllowed(), second.loopRampsAllowed());
+        assertEquals(TrafficDemand.REGIONAL, first.demand());
+        assertEquals(2, first.maximumStructureLevels());
+    }
+
+    @Test
+    void denseBuildingSurveyUpgradesMeasuredDemandOneClass() {
+        Map<RoadTileKey, RoadTile> roads = crossing(new ChunkPoint(0, 0), 16, 0, 1, false);
+        List<InterchangeBuildingFootprint> buildings = new ArrayList<>();
+        for (int index = 0; index < 8; index++) {
+            buildings.add(new InterchangeBuildingFootprint(index, index, 0, 0, 0));
+        }
+        CrossingEnvironmentLookup environment = (center, radius) ->
+                new InterchangeEnvironment(center, 16, 16, buildings);
+        RoadCrossingSurveyor surveyor = new RoadCrossingSurveyor(
+                256, STANDARD, environment);
+
+        DetectedRoadCrossing crossing = surveyor.survey(
+                new ChunkPoint(0, 0), lookup(roads), ELEVATIONS, 42L).orElseThrow();
+
+        assertEquals(TrafficDemand.HIGH, crossing.demand());
     }
 
     @Test
@@ -105,7 +143,7 @@ class RoadCrossingPlannerTest {
                 key, crossingOnly, lookup(steepRoads), ELEVATIONS);
 
         assertEquals(1, feasible.interchanges().size());
-        assertEquals(InterchangeType.SINGLE_QUADRANT,
+        assertEquals(InterchangeType.DIAMOND,
                 feasible.interchanges().getFirst().decision().selected().orElseThrow().type());
         assertTrue(feasible.rejectedCrossings().isEmpty());
 
@@ -128,13 +166,13 @@ class RoadCrossingPlannerTest {
                 plan.rejectedCrossings().isEmpty()
                         ? plan.conflictedCrossings().toString()
                         : plan.rejectedCrossings().getFirst().decision().diagnostic());
-        assertEquals(InterchangeType.STACK,
+        assertEquals(InterchangeType.PARTIAL_CLOVERLEAF,
                 plan.interchanges().getFirst().decision().selected().orElseThrow().type());
         assertTrue(plan.rejectedCrossings().isEmpty());
     }
 
     @Test
-    void longFourWayRoadsSelectAndCompileEveryFourWayFamily() {
+    void longFourWayRoadSelectionIsMeasuredAndSeedIndependent() {
         Map<RoadTileKey, RoadTile> roads = crossing(new ChunkPoint(0, 0), 32, 0, 1, false);
         RoadCrossingSurveyor surveyor = new RoadCrossingSurveyor(512, STANDARD);
         InterchangeSelector selector = InterchangeSelector.withBuiltIns();
@@ -153,13 +191,7 @@ class RoadCrossingPlannerTest {
             });
         }
 
-        Set<InterchangeType> expected = EnumSet.of(
-                InterchangeType.SPUI,
-                InterchangeType.PARTIAL_CLOVERLEAF,
-                InterchangeType.SINGLE_QUADRANT,
-                InterchangeType.DIAMOND,
-                InterchangeType.CLOVERLEAF,
-                InterchangeType.STACK);
+        Set<InterchangeType> expected = EnumSet.of(InterchangeType.CLOVERLEAF);
         assertEquals(expected, selected);
 
         InterchangeGeometryPlanner geometryPlanner = new InterchangeGeometryPlanner(

@@ -15,7 +15,7 @@ public record InterchangeGeometrySite(
         HalfBlockElevation zRoadCenterElevation) {
     private static final double LEGACY_LANE_OFFSET = 8.0;
     private static final double OUTER_THROUGH_LANE_OFFSET = 12.0;
-    private static final double AUXILIARY_LANE_OFFSET = 20.0;
+    private static final double AUXILIARY_LANE_OFFSET = 21.0;
 
     public InterchangeGeometrySite {
         Objects.requireNonNull(center, "center");
@@ -101,16 +101,36 @@ public record InterchangeGeometrySite(
             }
             default -> throw new IllegalStateException("Unhandled approach " + direction);
         }
-        HalfBlockElevation elevation = switch (direction) {
-            case EAST, WEST -> xRoadNativeElevation;
-            case NORTH, SOUTH -> zRoadNativeElevation;
-        };
+        HalfBlockElevation elevation = approachElevation(direction, run);
         return new InterchangePort(
                 direction,
                 flow,
                 new PlanarPoint(center.x() + localPoint.x(), center.z() + localPoint.z()),
                 elevation,
                 heading);
+    }
+
+    private HalfBlockElevation approachElevation(
+            ApproachDirection direction,
+            double distanceFromCenter) {
+        HalfBlockElevation nativeElevation = switch (direction) {
+            case EAST, WEST -> xRoadNativeElevation;
+            case NORTH, SOUTH -> zRoadNativeElevation;
+        };
+        HalfBlockElevation centerElevation = centerElevation(direction);
+        if (distanceFromCenter == approachRunBlocks) {
+            return nativeElevation;
+        }
+        double inwardProgress = (approachRunBlocks - distanceFromCenter)
+                / approachRunBlocks;
+        long delta = (long) centerElevation.halfBlocks()
+                - nativeElevation.halfBlocks();
+        long progressedHalfBlocks = (long) StrictMath.floor(
+                inwardProgress * StrictMath.abs(delta) + 1.0e-12);
+        long halfBlocks = delta >= 0
+                ? (long) nativeElevation.halfBlocks() + progressedHalfBlocks
+                : (long) nativeElevation.halfBlocks() - progressedHalfBlocks;
+        return new HalfBlockElevation(Math.toIntExact(halfBlocks));
     }
 
     public HalfBlockElevation centerElevation(ApproachDirection direction) {

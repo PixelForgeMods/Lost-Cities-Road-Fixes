@@ -123,9 +123,9 @@ class InterchangeConflictResolverTest {
                 requireFreeFlow,
                 new CrossingDecks(
                         new HalfBlockElevation(140),
-                        new HalfBlockElevation(152),
+                        new HalfBlockElevation(188),
                         new HalfBlockElevation(140),
-                        new HalfBlockElevation(160)),
+                        new HalfBlockElevation(188)),
                 seed);
         InterchangeDecision decision = InterchangeSelector.withBuiltIns()
                 .select(crossing.selectionSite());

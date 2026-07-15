@@ -27,9 +27,10 @@ public final class InterchangeGeometryPlanner {
         CrossingDecks decks = crossing.decks();
         int centerX = Math.addExact(Math.multiplyExact(crossing.chunk().x(), 16), 8);
         int centerZ = Math.addExact(Math.multiplyExact(crossing.chunk().z(), 16), 8);
+        int approachRunBlocks = plan.decision().selectedApproachRunBlocks();
         InterchangeGeometrySite site = new InterchangeGeometrySite(
                 new PlanarPoint(centerX, centerZ),
-                crossing.approachRunBlocks(),
+                approachRunBlocks,
                 decks.nativeX(),
                 decks.nativeZ(),
                 decks.plannedX(),
@@ -44,7 +45,7 @@ public final class InterchangeGeometryPlanner {
                     RoadAxis.X,
                     centerX,
                     centerZ,
-                    crossing.approachRunBlocks(),
+                    approachRunBlocks,
                     crossing.approaches().contains(ApproachDirection.WEST),
                     crossing.approaches().contains(ApproachDirection.EAST),
                     decks.nativeX(),
@@ -56,7 +57,7 @@ public final class InterchangeGeometryPlanner {
                     RoadAxis.Z,
                     centerX,
                     centerZ,
-                    crossing.approachRunBlocks(),
+                    approachRunBlocks,
                     crossing.approaches().contains(ApproachDirection.NORTH),
                     crossing.approaches().contains(ApproachDirection.SOUTH),
                     decks.nativeZ(),

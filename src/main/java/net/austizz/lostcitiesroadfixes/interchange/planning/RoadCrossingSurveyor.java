@@ -1,6 +1,7 @@
 package net.austizz.lostcitiesroadfixes.interchange.planning;
 
 import net.austizz.lostcitiesroadfixes.interchange.JunctionForm;
+import net.austizz.lostcitiesroadfixes.interchange.InterchangeEnvironment;
 import net.austizz.lostcitiesroadfixes.interchange.TrafficDemand;
 import net.austizz.lostcitiesroadfixes.interchange.layout.ApproachDirection;
 import net.austizz.lostcitiesroadfixes.planning.continuity.RoadAxis;
@@ -20,14 +21,24 @@ public final class RoadCrossingSurveyor {
     private final int maximumApproachBlocks;
     private final int maximumArmChunks;
     private final RoadDesignStandard standard;
+    private final CrossingEnvironmentLookup environmentLookup;
 
     public RoadCrossingSurveyor(int maximumApproachBlocks, RoadDesignStandard standard) {
+        this(maximumApproachBlocks, standard, CrossingEnvironmentLookup.empty());
+    }
+
+    public RoadCrossingSurveyor(
+            int maximumApproachBlocks,
+            RoadDesignStandard standard,
+            CrossingEnvironmentLookup environmentLookup) {
         if (maximumApproachBlocks < 1) {
             throw new IllegalArgumentException("Maximum approach must be positive");
         }
         this.maximumApproachBlocks = maximumApproachBlocks;
         this.maximumArmChunks = Math.floorDiv(maximumApproachBlocks + 15, 16);
         this.standard = Objects.requireNonNull(standard, "standard");
+        this.environmentLookup = Objects.requireNonNull(
+                environmentLookup, "environmentLookup");
     }
 
     public Optional<DetectedRoadCrossing> survey(
@@ -71,12 +82,9 @@ public final class RoadCrossingSurveyor {
         }
         long selectionSeed = siteSeed(
                 worldSeed, chunk, xRoad.get().level(), zRoad.get().level());
+        InterchangeEnvironment environment = environmentLookup.survey(chunk, radius);
         SiteEnvelope envelope = siteEnvelope(
-                form,
-                selectionSeed,
-                approach,
-                radius,
-                separationHalfBlocks > standard.preferredDeckSeparationBlocks() * 2);
+                approach, radius, separationHalfBlocks, environment);
 
         return Optional.of(new DetectedRoadCrossing(
                 chunk,
@@ -92,41 +100,33 @@ public final class RoadCrossingSurveyor {
                 envelope.loopRampsAllowed(),
                 envelope.requireAllMovementsFreeFlow(),
                 decks,
-                selectionSeed));
+                selectionSeed,
+                environment));
     }
 
-    private static SiteEnvelope siteEnvelope(
-            JunctionForm form,
-            long selectionSeed,
+    private SiteEnvelope siteEnvelope(
             int approachRunBlocks,
             int radiusBlocks,
-            boolean unusuallyLargeDeckSeparation) {
-        if (form == JunctionForm.THREE_WAY) {
-            return Long.remainderUnsigned(selectionSeed, 2L) == 0L
-                    ? new SiteEnvelope(2, TrafficDemand.REGIONAL, 2, true, true)
-                    : new SiteEnvelope(3, TrafficDemand.HIGH, 3, false, true);
+            int separationHalfBlocks,
+            InterchangeEnvironment environment) {
+        TrafficDemand demand = approachRunBlocks < 256
+                ? TrafficDemand.LOCAL
+                : approachRunBlocks < 320
+                        ? TrafficDemand.REGIONAL
+                        : TrafficDemand.HIGH;
+        if (environment.hasDenseBuildings() && demand != TrafficDemand.HIGH) {
+            demand = TrafficDemand.values()[demand.ordinal() + 1];
         }
-        if (unusuallyLargeDeckSeparation) {
-            return approachRunBlocks >= 512
-                    ? new SiteEnvelope(4, TrafficDemand.HIGH, 4, false, true)
-                    : new SiteEnvelope(2, TrafficDemand.HIGH, 2, true, false);
-        }
-        int bucket = (int) Long.remainderUnsigned(selectionSeed, 6L);
-        if (bucket == 4 && (approachRunBlocks < 320 || radiusBlocks < 224)) {
-            bucket = 5;
-        }
-        if (bucket == 5 && approachRunBlocks < 512) {
-            bucket = 0;
-        }
-        return switch (bucket) {
-            case 0 -> new SiteEnvelope(1, TrafficDemand.HIGH, 2, false, false);
-            case 1 -> new SiteEnvelope(2, TrafficDemand.HIGH, 2, true, false);
-            case 2 -> new SiteEnvelope(1, TrafficDemand.LOCAL, 2, false, false);
-            case 3 -> new SiteEnvelope(2, TrafficDemand.REGIONAL, 2, false, false);
-            case 4 -> new SiteEnvelope(4, TrafficDemand.HIGH, 2, true, true);
-            case 5 -> new SiteEnvelope(4, TrafficDemand.HIGH, 4, false, true);
-            default -> throw new IllegalStateException("Unreachable site-envelope bucket");
-        };
+        int clearanceHalfBlocks = standard.minimumVehicleClearanceBlocks() * 2;
+        int maximumLevels = Math.min(4, 1 + separationHalfBlocks / clearanceHalfBlocks);
+        int availableQuadrants = environment.lightlyOccupiedQuadrants();
+        boolean loopRampsAllowed = radiusBlocks >= 80 && availableQuadrants >= 2;
+        return new SiteEnvelope(
+                availableQuadrants,
+                demand,
+                maximumLevels,
+                loopRampsAllowed,
+                false);
     }
 
     private int armRun(

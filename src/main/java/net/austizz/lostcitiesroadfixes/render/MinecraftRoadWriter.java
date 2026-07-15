@@ -4,13 +4,17 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.ChunkAccess;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public final class MinecraftRoadWriter {
-    public static final int HEADROOM_BLOCKS = 7;
-
     private final MinecraftRoadPalette palette;
     private final RoadSupportPlanner supportPlanner = new RoadSupportPlanner();
+    private final RoadClearanceEnvelopePlanner clearancePlanner =
+            new RoadClearanceEnvelopePlanner();
 
     public MinecraftRoadWriter() {
         this(MinecraftRoadPalette.DEFAULT);
@@ -36,6 +40,8 @@ public final class MinecraftRoadWriter {
         }
 
         int writes = 0;
+        Map<RoadSurfacePosition, Integer> plannedHeadroom = clearancePlanner.plan(surface);
+        Map<Column, List<Integer>> deckElevations = deckElevations(surface);
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         for (RoadSurfaceCell cell : surface.cells()) {
             int y = cell.position().elevation().floorBlockY();
@@ -52,7 +58,14 @@ public final class MinecraftRoadWriter {
                     halfBlock ? palette.bottomSlab(cell.role()) : palette.fullBlock(cell.role()),
                     false);
 
-            int clearTop = Math.min(y + HEADROOM_BLOCKS, chunk.getMaxBuildHeight() - 1);
+            int clearTop = Math.min(
+                    y + plannedHeadroom.get(cell.position()),
+                    chunk.getMaxBuildHeight() - 1);
+            clearTop = capBelowNextDeck(
+                    clearTop,
+                    y,
+                    deckElevations.get(new Column(
+                            cell.position().x(), cell.position().z())));
             for (int clearY = y + 1; clearY <= clearTop; clearY++) {
                 cursor.setY(clearY);
                 var existing = chunk.getBlockState(cursor);
@@ -68,6 +81,32 @@ public final class MinecraftRoadWriter {
             }
         }
         return writes;
+    }
+
+    private static Map<Column, List<Integer>> deckElevations(ChunkRoadSurface surface) {
+        Map<Column, List<Integer>> result = new HashMap<>();
+        for (RoadSurfaceCell cell : surface.cells()) {
+            Column column = new Column(cell.position().x(), cell.position().z());
+            result.computeIfAbsent(column, ignored -> new ArrayList<>())
+                    .add(cell.position().elevation().floorBlockY());
+        }
+        result.values().forEach(elevations -> elevations.sort(Integer::compareTo));
+        return result;
+    }
+
+    private static int capBelowNextDeck(
+            int requestedTop,
+            int currentDeckY,
+            List<Integer> deckElevations) {
+        if (deckElevations == null) {
+            return requestedTop;
+        }
+        for (int deckY : deckElevations) {
+            if (deckY > currentDeckY) {
+                return StrictMath.min(requestedTop, deckY - 2);
+            }
+        }
+        return requestedTop;
     }
 
     private void writeSupport(
@@ -93,5 +132,8 @@ public final class MinecraftRoadWriter {
             }
             chunk.setBlockState(cursor, palette.support(), false);
         }
+    }
+
+    private record Column(int x, int z) {
     }
 }

@@ -15,6 +15,7 @@ import net.austizz.lostcitiesroadfixes.planning.RoadPlanKey;
 import net.austizz.lostcitiesroadfixes.planning.continuity.RoadAxis;
 import net.austizz.lostcitiesroadfixes.render.ChunkRoadSurface;
 import net.austizz.lostcitiesroadfixes.render.ElevatedRoadTile;
+import net.austizz.lostcitiesroadfixes.render.RoadSurfaceCell;
 import net.austizz.lostcitiesroadfixes.road.ChunkPoint;
 import net.austizz.lostcitiesroadfixes.road.HalfBlockElevation;
 import net.austizz.lostcitiesroadfixes.road.PlanningRegion;
@@ -23,8 +24,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -86,6 +89,29 @@ class RuntimeInterchangeIntegrationTest {
         assertTrue(surface.cellAt(8, 328, elevation(152)).isPresent());
         assertTrue(surface.cellAt(8, 329, elevation(152)).isPresent());
         assertTrue(surface.cellAt(8, 335, elevation(152)).isPresent());
+    }
+
+    @Test
+    void incompatibleNativeIntersectionDecksAreRemovedInsideAnInterchange() {
+        PlannedInterchangeGeometry geometry = geometry();
+        List<ElevatedRoadTile> conflictingIntersection = List.of(
+                tile(CENTER, RoadAxis.X, 146),
+                tile(CENTER, RoadAxis.Z, 146));
+
+        ChunkRoadSurface surface = new RuntimeRoadSurfaceComposer().compose(
+                CENTER, conflictingIntersection, List.of(geometry));
+
+        Map<String, List<RoadSurfaceCell>> byColumn = surface.cells().stream()
+                .collect(Collectors.groupingBy(cell ->
+                        cell.position().x() + "," + cell.position().z()));
+        List<String> unsafeColumns = byColumn.entrySet().stream()
+                .filter(entry -> hasUnsafeVerticalPair(entry.getValue()))
+                .map(Map.Entry::getKey)
+                .sorted()
+                .toList();
+        assertTrue(unsafeColumns.isEmpty(),
+                () -> "intersection decks conflict with interchange clearance: "
+                        + unsafeColumns);
     }
 
     @Test
@@ -171,6 +197,22 @@ class RuntimeInterchangeIntegrationTest {
             RoadAxis axis,
             int halfBlocks) {
         return new ElevatedRoadTile(chunk, axis, elevation(halfBlocks));
+    }
+
+    private static boolean hasUnsafeVerticalPair(List<RoadSurfaceCell> column) {
+        int minimumClearance = RoadDesignStandard.DEFAULT
+                .minimumVehicleClearanceBlocks() * 2;
+        for (int left = 0; left < column.size(); left++) {
+            for (int right = left + 1; right < column.size(); right++) {
+                int separation = StrictMath.abs(
+                        column.get(left).position().elevation().halfBlocks()
+                                - column.get(right).position().elevation().halfBlocks());
+                if (separation > 0 && separation <= minimumClearance) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static HalfBlockElevation elevation(int halfBlocks) {
