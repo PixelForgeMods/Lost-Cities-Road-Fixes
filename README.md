@@ -16,7 +16,7 @@ The mod is intentionally pinned to one Lost Cities build because its compatibili
 Back up the world, place the universal JAR in the server and client `mods`
 folders, and install it before exploring or pregenerating affected terrain.
 Road Fixes only changes newly generated chunks. See the
-[1.1.1 release notes](docs/release/1.1.1.md) and [changelog](CHANGELOG.md).
+[1.2.0 release notes](docs/release/1.2.0.md) and [changelog](CHANGELOG.md).
 
 ## Generation behavior
 
@@ -36,17 +36,22 @@ world. See the [release validation evidence](docs/validation/2026-07-exact-modpa
 The reported 18-block stacked crossing was also replayed from a fresh copy of
 that seed; see the [stacked-interchange regression](docs/regressions/2026-07-stacked-interchange-level-gap.md).
 
-Closely spaced crossings are coordinated before geometry is emitted. When two
-safe interchange cores physically cannot coexist, a stable world-derived winner
-receives the complete interchange and the other crossing remains an intact
-straight flyover; partial or overlapping ramps are never generated.
+Closely spaced crossings are coordinated before geometry is emitted. The
+planner reserves each compiled approach corridor as well as the core. Identical
+flat shared arterials can coexist; incompatible overlapping grades
+deterministically keep the higher-priority crossing and leave the other as an
+intact straight flyover. Partial, crushed, or overlapping ramps are never
+generated.
 
 Built-in interchanges add 10-block collector lanes with gradual tapers and
 level fork/merge zones. Stack branches share one physical trunk and use one
 monotonic grade; a full cloverleaf has four local quadrant loops nested inside
 four independent outer ramps. Deterministic site envelopes vary long four-way
 crossings across SPUI, partial cloverleaf, single-quadrant, diamond, cloverleaf,
-and stack families.
+and stack families. Available radius, quadrants, road length, deck gap, measured
+building footprints, and demand all participate. A low-gap compact site prefers
+a diamond/SPUI-class design; a four-tier stack is considered only when all four
+physical levels fit.
 
 Road terrain clearance forms a taller arched envelope—8 blocks at shoulders and
 up to 12 over travel lanes—while planned bridge decks remain protected. Native
@@ -58,6 +63,12 @@ surface plus a one-chunk clearance band. A single building or complete
 multi-building is omitted whenever that reserved area would be touched.
 Implementation and exact-pack evidence are in the
 [professional-interchange regression](docs/regressions/2026-07-professional-cloverleaf-and-building-clearance.md).
+
+Operators can inspect aggregate family counts with
+`/lostcitiesroadfixes status` and explain one surveyed crossing with
+`/lostcitiesroadfixes explain <chunkX> <chunkZ>`. The report includes measured
+space, native/planned elevations, selected approach length, displaced buildings,
+rejection reasons, or the crossing that won a corridor conflict.
 
 ## Development
 

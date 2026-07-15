@@ -11,6 +11,7 @@ import net.austizz.lostcitiesroadfixes.interchange.planning.DetectedRoadCrossing
 import net.austizz.lostcitiesroadfixes.interchange.planning.PlannedInterchange;
 import net.austizz.lostcitiesroadfixes.interchange.render.InterchangeGeometryPlanner;
 import net.austizz.lostcitiesroadfixes.interchange.render.PlannedInterchangeGeometry;
+import net.austizz.lostcitiesroadfixes.diagnostics.InterchangeExplanation;
 import net.austizz.lostcitiesroadfixes.planning.RoadPlanKey;
 import net.austizz.lostcitiesroadfixes.planning.continuity.RoadAxis;
 import net.austizz.lostcitiesroadfixes.render.ChunkRoadSurface;
@@ -145,6 +146,21 @@ class RuntimeInterchangeIntegrationTest {
         assertTrue(plan.affecting(new ChunkPoint(21, 0)).isEmpty());
         assertTrue(geometry.mayAffect(new ChunkPoint(-20, -20)));
         assertFalse(geometry.mayAffect(new ChunkPoint(-21, -21)));
+    }
+
+    @Test
+    void regionalPlanRetainsAnExplanationForEachSurveyedCrossing() {
+        ChunkPoint explainedChunk = new ChunkPoint(3, 4);
+        InterchangeExplanation explanation = InterchangeExplanation.none(explainedChunk);
+        RegionalInterchangeGeometryPlan plan = new RegionalInterchangeGeometryPlan(
+                new RoadPlanKey(1L, "minecraft:overworld", new PlanningRegion(0, 0), "test"),
+                List.of(),
+                0,
+                0,
+                List.of(explanation));
+
+        assertEquals(explanation, plan.explanationAt(explainedChunk).orElseThrow());
+        assertTrue(plan.explanationAt(new ChunkPoint(4, 4)).isEmpty());
     }
 
     @Test

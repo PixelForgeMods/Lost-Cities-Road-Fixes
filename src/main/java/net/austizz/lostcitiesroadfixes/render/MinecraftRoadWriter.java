@@ -39,25 +39,32 @@ public final class MinecraftRoadWriter {
             throw new IllegalArgumentException("Chunk does not own the supplied road surface");
         }
 
-        int writes = 0;
         Map<RoadSurfacePosition, Integer> plannedHeadroom = clearancePlanner.plan(surface);
         Map<Column, List<Integer>> deckElevations = deckElevations(surface);
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        clearAllVehicleEnvelopes(
+                chunk, surface, plannedHeadroom, deckElevations, cursor);
+        int writes = writeAllDecks(chunk, surface, cursor);
+        if (supportPolicy.enabled()) {
+            for (RoadSurfacePosition anchor : supportPlanner.anchors(surface)) {
+                writeSupport(chunk, cursor, anchor, supportPolicy.maximumDepthBlocks());
+            }
+        }
+        return writes;
+    }
+
+    private static void clearAllVehicleEnvelopes(
+            ChunkAccess chunk,
+            ChunkRoadSurface surface,
+            Map<RoadSurfacePosition, Integer> plannedHeadroom,
+            Map<Column, List<Integer>> deckElevations,
+            BlockPos.MutableBlockPos cursor) {
         for (RoadSurfaceCell cell : surface.cells()) {
             int y = cell.position().elevation().floorBlockY();
             if (y <= chunk.getMinBuildHeight() || y >= chunk.getMaxBuildHeight()) {
                 continue;
             }
-
-            cursor.set(cell.position().x(), y - 1, cell.position().z());
-            chunk.setBlockState(cursor, palette.foundation(), false);
-
-            cursor.setY(y);
-            boolean halfBlock = Math.floorMod(cell.position().elevation().halfBlocks(), 2) != 0;
-            chunk.setBlockState(cursor,
-                    halfBlock ? palette.bottomSlab(cell.role()) : palette.fullBlock(cell.role()),
-                    false);
-
+            cursor.set(cell.position().x(), y, cell.position().z());
             int clearTop = Math.min(
                     y + plannedHeadroom.get(cell.position()),
                     chunk.getMaxBuildHeight() - 1);
@@ -73,12 +80,33 @@ public final class MinecraftRoadWriter {
                     chunk.setBlockState(cursor, Blocks.AIR.defaultBlockState(), false);
                 }
             }
-            writes++;
         }
-        if (supportPolicy.enabled()) {
-            for (RoadSurfacePosition anchor : supportPlanner.anchors(surface)) {
-                writeSupport(chunk, cursor, anchor, supportPolicy.maximumDepthBlocks());
+    }
+
+    private int writeAllDecks(
+            ChunkAccess chunk,
+            ChunkRoadSurface surface,
+            BlockPos.MutableBlockPos cursor) {
+        int writes = 0;
+        for (RoadSurfaceCell cell : surface.cells()) {
+            int y = cell.position().elevation().floorBlockY();
+            if (y <= chunk.getMinBuildHeight() || y >= chunk.getMaxBuildHeight()) {
+                continue;
             }
+
+            cursor.set(cell.position().x(), y - 1, cell.position().z());
+            chunk.setBlockState(cursor, palette.foundation(), false);
+
+            cursor.setY(y);
+            boolean halfBlock = Math.floorMod(
+                    cell.position().elevation().halfBlocks(), 2) != 0;
+            chunk.setBlockState(
+                    cursor,
+                    halfBlock
+                            ? palette.bottomSlab(cell.role())
+                            : palette.fullBlock(cell.role()),
+                    false);
+            writes++;
         }
         return writes;
     }

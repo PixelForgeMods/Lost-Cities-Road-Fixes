@@ -24,36 +24,38 @@ terminals apply to built-in templates and format-1 family replacements. A
 format-2 author owns the explicit movement widths, forms, and terminal behavior
 described here.
 
-This complete four-way example has one loop ramp:
+This complete two-tier four-way example keeps every authored turn on the upper
+core tier. Its large radius leaves enough separated route length for the legal
+grade and terminal locks:
 
 ```json
 {
   "format": 2,
-  "family": "partial_cloverleaf",
+  "family": "diamond",
   "junction_form": "four_way",
-  "minimum_radius_blocks": 64,
+  "minimum_radius_blocks": 320,
   "required_quadrants": 2,
-  "minimum_approach_run_blocks": 160,
+  "minimum_approach_run_blocks": 352,
   "structure_levels": 2,
-  "uses_loop_ramps": true,
+  "uses_loop_ramps": false,
   "all_movements_free_flow": false,
   "capacity": "regional",
-  "free_flow_movement_count": 5,
+  "free_flow_movement_count": 4,
   "construction_complexity": 3,
   "geometry": {
     "movements": [
-      {"from":"north","to":"south","form":"mainline","control":"free_flow","width_blocks":8,"structure_level":1},
-      {"from":"north","to":"west","form":"direct","control":"yield","width_blocks":8,"structure_level":1},
+      {"from":"north","to":"south","form":"mainline","control":"free_flow","width_blocks":8,"structure_level":2},
+      {"from":"north","to":"west","form":"direct","control":"yield","width_blocks":8,"structure_level":2},
       {"from":"north","to":"east","form":"direct","control":"signalized","width_blocks":8,"structure_level":2},
       {"from":"east","to":"west","form":"mainline","control":"free_flow","width_blocks":8,"structure_level":1},
-      {"from":"east","to":"north","form":"direct","control":"yield","width_blocks":8,"structure_level":1},
+      {"from":"east","to":"north","form":"direct","control":"yield","width_blocks":8,"structure_level":2},
       {"from":"east","to":"south","form":"direct","control":"signalized","width_blocks":8,"structure_level":2},
-      {"from":"south","to":"north","form":"mainline","control":"free_flow","width_blocks":8,"structure_level":1},
-      {"from":"south","to":"east","form":"direct","control":"yield","width_blocks":8,"structure_level":1},
+      {"from":"south","to":"north","form":"mainline","control":"free_flow","width_blocks":8,"structure_level":2},
+      {"from":"south","to":"east","form":"direct","control":"yield","width_blocks":8,"structure_level":2},
       {"from":"south","to":"west","form":"direct","control":"signalized","width_blocks":8,"structure_level":2},
       {"from":"west","to":"east","form":"mainline","control":"free_flow","width_blocks":8,"structure_level":1},
-      {"from":"west","to":"south","form":"direct","control":"yield","width_blocks":8,"structure_level":1},
-      {"from":"west","to":"north","form":"loop","control":"free_flow","width_blocks":10,"structure_level":2}
+      {"from":"west","to":"south","form":"direct","control":"yield","width_blocks":8,"structure_level":2},
+      {"from":"west","to":"north","form":"direct","control":"signalized","width_blocks":8,"structure_level":2}
     ]
   }
 }
@@ -72,7 +74,14 @@ This complete four-way example has one loop ramp:
   `mainline` movement must stay at 8 because its two carriageways are rendered by
   the fixed 32-block arterial cross-section; direct and loop ramp widths are
   customizable.
-- `structure_level` is from 1 through the root `structure_levels` value.
+- `structure_level` is from 1 through the root `structure_levels` value. For a
+  turning movement this is a physical core tier: level 1 is the lower planned
+  road deck, the highest level is the upper deck, and intermediate levels are
+  evenly spaced. The route retains its exact native elevation at both ports,
+  changes grade only after a protected terminal lock, reaches the declared tier
+  by the core, and returns before its destination merge. Mainline geometry stays
+  on the surveyed arterial; its field remains part of the complete blueprint
+  metadata.
 
 A four-way design must contain exactly all 12 legal directed movements. A
 three-way design uses the canonical west, east, and south approaches, with north
@@ -99,7 +108,10 @@ With the fixed eight-block carriageway offset and 24-block minimum ramp radius:
 
 The site must also have more approach run than nominal radius. Routes retain the
 native elevation at both ports, and the normal half-block grade limit applies to
-the calculated path between them.
+every native-to-tier and tier-to-native transition. Candidate compilation also
+checks every authored route overlap. Two surfaces may join at one elevation or
+remain at least seven blocks apart; a site that would create a crushed deck is
+rejected for that crossing instead of reaching world generation.
 
 Selector metadata must describe the blueprint exactly:
 
@@ -110,6 +122,9 @@ Selector metadata must describe the blueprint exactly:
 
 Duplicate, missing, unavailable, contradictory, undersized, and unknown fields
 reject the complete datapack reload with the design resource ID in the error.
+A structurally valid design can still be infeasible at a particular crossing
+when that site's measured run, gap, footprint, or route clearances are too small;
+`/lostcitiesroadfixes explain <chunkX> <chunkZ>` reports that rejection.
 
 ## Format 1: selector-only compatibility
 

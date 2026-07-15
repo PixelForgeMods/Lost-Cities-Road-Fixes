@@ -2,6 +2,41 @@
 
 All notable changes to Lost Cities: Road Fixes are documented here.
 
+## 1.2.0+mc1.21.1 — 2026-07-15
+
+### Calculated selection and corridor coordination
+
+- Replaces seed buckets with measured demand, arm length, deck gap, open
+  quadrants, and deduplicated Lost Cities building footprints.
+- Compiles every candidate at its shortest safe chunk-aligned approach before
+  scoring it, prioritizing fewer displaced buildings and the best operational
+  fit. Low-gap compact sites prefer diamond/SPUI-class designs.
+- Reserves complete compiled approach corridors, not only nominal cores.
+  Identical flat shared arterials may coexist; mismatched overlapping grades
+  deterministically suppress the lower-priority interchange.
+- Makes all selection and conflict tie-breaking independent of the world seed.
+
+### Physical geometry safety
+
+- Restores a true four-tier stack with monotonic endpoint-to-core profiles,
+  shared departure/arrival trunks, and seven-block ramp/ramp and ramp/mainline
+  clearance. A stack is rejected unless all four physical tiers fit.
+- Uses the shortest legal native-to-planned arterial transition and then holds
+  the road level through the core, eliminating stretched approach ramps.
+- Makes format-2 `structure_level` values physical ramp tiers. Site-dependent
+  geometry that cannot reach its tier or maintain clearance is rejected.
+- Adds a final composed-surface clearance gate and writes each chunk in three
+  ordered passes: clear every vehicle envelope, place every deck, then supports.
+
+### Diagnostics
+
+- Adds per-family selected counts to `/lostcitiesroadfixes status`.
+- Adds `/lostcitiesroadfixes explain <chunkX> <chunkZ>` with selected family,
+  measured site/elevations, compiled approach, displaced buildings, candidate
+  rejection reasons, or the blocking crossing.
+- Records the overlapping-envelope root cause and regression evidence in the
+  1.2.0 architecture and regression notes.
+
 ## 1.1.1+mc1.21.1 — 2026-07-15
 
 ### Ramp geometry

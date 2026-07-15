@@ -65,11 +65,12 @@ the new cache generation.
 
 ## Operator commands
 
-Both commands require Minecraft permission level 2. `lcroadfixes` is a guarded
+All commands require Minecraft permission level 2. `lcroadfixes` is a guarded
 alias for `lostcitiesroadfixes`.
 
 ```text
 /lostcitiesroadfixes status
+/lostcitiesroadfixes explain <chunkX> <chunkZ>
 /lostcitiesroadfixes clear_caches
 ```
 
@@ -78,11 +79,19 @@ alias for `lostcitiesroadfixes`.
 - Lost Cities binary compatibility state;
 - native-suppression, building-chunk-suppression, and late-render hook counts;
 - planned, selected, rejected, and rendered interchange counts;
+- selected totals for each of the eight interchange families;
 - conflict-suppressed interchange counts, distinct from infeasible sites;
 - current road/interchange cache sizes;
 - loaded design/theme counts;
 - configured and resolved theme IDs and fallback state;
 - active safe configuration bounds.
+
+`explain` plans or reads the owning region in the current dimension and reports
+the exact crossing outcome. A selected report includes family, site demand,
+available space, native/planned road elevations, compiled approach length, and
+displaced-building count. A rejected report lists every candidate's reasons. A
+conflicted report names the winning crossing. If the chunk is not a differing-
+height crossing, the command says so explicitly.
 
 `clear_caches` atomically replaces both regional cache generations. It does not
 modify generated chunks or reset counters; later requests deterministically
@@ -95,9 +104,10 @@ interchange may require more than half of that spacing on both sides, so two
 neighboring structures cannot always coexist without overlapping. This safety
 policy is intentionally not configurable.
 
-The planner reserves each selected design's declared core and admits only the
-stable higher-priority candidate when cores overlap. A suppressed crossing keeps
-both highways available for straight-through driving but receives no partial
-ramps. `/lostcitiesroadfixes status` reports these as `conflicted`; `rejected`
-continues to mean that no design met the site's grade, radius, capacity, or
-clearance requirements.
+The planner reserves each selected design's compiled core and full approach
+corridors. Collinear overlapping corridors coexist only when both use the same
+flat arterial elevation. Otherwise the stable higher-priority candidate wins. A
+suppressed crossing keeps both highways available for straight-through driving
+but receives no partial ramps. `/lostcitiesroadfixes status` reports these as
+`conflicted`; `rejected` continues to mean that no design met the site's grade,
+radius, capacity, footprint, or clearance requirements.

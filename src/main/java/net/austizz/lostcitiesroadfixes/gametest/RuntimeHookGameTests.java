@@ -30,8 +30,9 @@ import net.minecraft.world.level.block.state.properties.SlabType;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-import java.util.List;
 import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -115,23 +116,15 @@ public final class RuntimeHookGameTests {
         BlockPos absoluteLeft = helper.absolutePos(left);
         BlockPos absoluteCenter = helper.absolutePos(center);
         BlockPos absoluteRight = helper.absolutePos(right);
-        ChunkPoint chunk = new ChunkPoint(absoluteCenter.getX() >> 4, absoluteCenter.getZ() >> 4);
         HalfBlockElevation elevation = HalfBlockElevation.ofWholeBlocks(absoluteCenter.getY());
-        ChunkRoadSurface surface = new ChunkRoadSurface(chunk, List.of(
-                new RoadSurfaceCell(
-                        new RoadSurfacePosition(
-                                absoluteLeft.getX(), absoluteLeft.getZ(), elevation),
-                        RoadSurfaceRole.SHOULDER),
-                new RoadSurfaceCell(
-                        new RoadSurfacePosition(
-                                absoluteCenter.getX(), absoluteCenter.getZ(), elevation),
-                        RoadSurfaceRole.ASPHALT),
-                new RoadSurfaceCell(
-                        new RoadSurfacePosition(
-                                absoluteRight.getX(), absoluteRight.getZ(), elevation),
-                        RoadSurfaceRole.SHOULDER)));
-
-        new MinecraftRoadWriter().write(helper.getLevel().getChunkAt(absoluteCenter), surface);
+        Map<ChunkPoint, List<RoadSurfaceCell>> cellsByChunk = new HashMap<>();
+        addCell(cellsByChunk, absoluteLeft, elevation, RoadSurfaceRole.SHOULDER);
+        addCell(cellsByChunk, absoluteCenter, elevation, RoadSurfaceRole.ASPHALT);
+        addCell(cellsByChunk, absoluteRight, elevation, RoadSurfaceRole.SHOULDER);
+        MinecraftRoadWriter writer = new MinecraftRoadWriter();
+        cellsByChunk.forEach((chunk, cells) -> writer.write(
+                helper.getLevel().getChunk(chunk.x(), chunk.z()),
+                new ChunkRoadSurface(chunk, cells)));
 
         helper.assertBlockPresent(Blocks.AIR, left.above(8));
         helper.assertBlockPresent(Blocks.STONE, left.above(9));
@@ -283,6 +276,7 @@ public final class RuntimeHookGameTests {
         var root = dispatcher.getRoot().getChild(LostCitiesRoadFixes.MOD_ID);
         if (root == null
                 || root.getChild("status") == null
+                || root.getChild("explain") == null
                 || root.getChild("clear_caches") == null
                 || dispatcher.getRoot().getChild("lcroadfixes") == null) {
             helper.fail("Road-fix operator commands were not registered");
@@ -291,8 +285,8 @@ public final class RuntimeHookGameTests {
         int statusLines = dispatcher.execute(
                 LostCitiesRoadFixes.MOD_ID + " status",
                 server.createCommandSourceStack());
-        if (statusLines != 8) {
-            helper.fail("Status command returned " + statusLines + " lines instead of 8");
+        if (statusLines != 9) {
+            helper.fail("Status command returned " + statusLines + " lines instead of 9");
             return;
         }
         dispatcher.execute(
@@ -331,6 +325,19 @@ public final class RuntimeHookGameTests {
         ChunkRoadSurface surface = new ChunkRoadSurface(chunkPoint, List.of(new RoadSurfaceCell(
                 new RoadSurfacePosition(absolute.getX(), absolute.getZ(), elevation), role)));
         writer.write(helper.getLevel().getChunkAt(absolute), surface, supportPolicy);
+    }
+
+    private static void addCell(
+            Map<ChunkPoint, List<RoadSurfaceCell>> cellsByChunk,
+            BlockPos position,
+            HalfBlockElevation elevation,
+            RoadSurfaceRole role) {
+        ChunkPoint chunk = new ChunkPoint(position.getX() >> 4, position.getZ() >> 4);
+        cellsByChunk.computeIfAbsent(chunk, ignored -> new java.util.ArrayList<>())
+                .add(new RoadSurfaceCell(
+                        new RoadSurfacePosition(
+                                position.getX(), position.getZ(), elevation),
+                        role));
     }
 
     private static MinecraftRoadPalette testPalette() {

@@ -1,7 +1,12 @@
 package net.austizz.lostcitiesroadfixes.diagnostics;
 
+import net.austizz.lostcitiesroadfixes.interchange.InterchangeType;
+
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 public record RoadDiagnosticsSnapshot(
         boolean compatible,
@@ -10,6 +15,7 @@ public record RoadDiagnosticsSnapshot(
         long lateRenderInvocations,
         long interchangeRegionsPlanned,
         long selectedInterchanges,
+        Map<InterchangeType, Long> selectedFamilies,
         long rejectedCrossings,
         long conflictedCrossings,
         long interchangeRenderInvocations,
@@ -28,6 +34,16 @@ public record RoadDiagnosticsSnapshot(
         requireNonNegative(lateRenderInvocations, "lateRenderInvocations");
         requireNonNegative(interchangeRegionsPlanned, "interchangeRegionsPlanned");
         requireNonNegative(selectedInterchanges, "selectedInterchanges");
+        Objects.requireNonNull(selectedFamilies, "selectedFamilies");
+        EnumMap<InterchangeType, Long> stableFamilies =
+                new EnumMap<>(InterchangeType.class);
+        selectedFamilies.forEach((type, count) -> {
+            Objects.requireNonNull(type, "selected family type");
+            Objects.requireNonNull(count, "selected family count");
+            requireNonNegative(count, "selectedFamilies[" + type + "]");
+            stableFamilies.put(type, count);
+        });
+        selectedFamilies = Map.copyOf(stableFamilies);
         requireNonNegative(rejectedCrossings, "rejectedCrossings");
         requireNonNegative(conflictedCrossings, "conflictedCrossings");
         requireNonNegative(interchangeRenderInvocations, "interchangeRenderInvocations");
@@ -55,6 +71,10 @@ public record RoadDiagnosticsSnapshot(
                         + ", rejected=" + rejectedCrossings
                         + ", conflicted=" + conflictedCrossings
                         + ", renderedChunks=" + interchangeRenderInvocations,
+                "families: " + java.util.Arrays.stream(InterchangeType.values())
+                        .map(type -> type.name().toLowerCase(java.util.Locale.ROOT)
+                                + '=' + selectedFamilies.getOrDefault(type, 0L))
+                        .collect(Collectors.joining(", ")),
                 "caches: roads=" + roadCacheSize
                         + ", interchanges=" + interchangeCacheSize,
                 "resources: loadedDesigns=" + loadedDesigns

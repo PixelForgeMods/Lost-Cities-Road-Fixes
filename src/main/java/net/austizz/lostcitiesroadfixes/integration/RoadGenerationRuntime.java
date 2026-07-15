@@ -8,11 +8,13 @@ import mcjty.lostcities.worldgen.LostCityTerrainFeature;
 import net.austizz.lostcitiesroadfixes.LostCitiesRoadFixes;
 import net.austizz.lostcitiesroadfixes.config.RoadFixesServerConfig;
 import net.austizz.lostcitiesroadfixes.config.RoadOperationalSettings;
+import net.austizz.lostcitiesroadfixes.diagnostics.InterchangeExplanation;
 import net.austizz.lostcitiesroadfixes.diagnostics.RoadDiagnosticsSnapshot;
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeDesign;
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeDesignFingerprint;
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeDesignResources;
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeSelector;
+import net.austizz.lostcitiesroadfixes.interchange.InterchangeType;
 import net.austizz.lostcitiesroadfixes.interchange.layout.InterchangeLayoutFactory;
 import net.austizz.lostcitiesroadfixes.interchange.planning.CrossingElevationModel;
 import net.austizz.lostcitiesroadfixes.interchange.planning.InterchangeConflictResolver;
@@ -40,9 +42,12 @@ import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.world.level.chunk.ChunkAccess;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicLongArray;
 
 public final class RoadGenerationRuntime {
     private static final int MAXIMUM_INTERCHANGE_APPROACH_BLOCKS = 512;
@@ -58,6 +63,8 @@ public final class RoadGenerationRuntime {
     private static final AtomicLong LATE_RENDER_INVOCATIONS = new AtomicLong();
     private static final AtomicLong INTERCHANGE_REGIONS_PLANNED = new AtomicLong();
     private static final AtomicLong SELECTED_INTERCHANGES_PLANNED = new AtomicLong();
+    private static final AtomicLongArray SELECTED_INTERCHANGES_BY_TYPE =
+            new AtomicLongArray(InterchangeType.values().length);
     private static final AtomicLong REJECTED_CROSSINGS_PLANNED = new AtomicLong();
     private static final AtomicLong CONFLICTED_CROSSINGS_PLANNED = new AtomicLong();
     private static final AtomicLong INTERCHANGE_RENDER_INVOCATIONS = new AtomicLong();
@@ -91,6 +98,14 @@ public final class RoadGenerationRuntime {
         return SELECTED_INTERCHANGES_PLANNED.get();
     }
 
+    public static Map<InterchangeType, Long> selectedInterchangeFamilyCounts() {
+        EnumMap<InterchangeType, Long> result = new EnumMap<>(InterchangeType.class);
+        for (InterchangeType type : InterchangeType.values()) {
+            result.put(type, SELECTED_INTERCHANGES_BY_TYPE.get(type.ordinal()));
+        }
+        return Map.copyOf(result);
+    }
+
     public static long rejectedCrossingPlanCount() {
         return REJECTED_CROSSINGS_PLANNED.get();
     }
@@ -121,6 +136,7 @@ public final class RoadGenerationRuntime {
                 lateRenderInvocationCount(),
                 interchangeRegionPlanCount(),
                 selectedInterchangePlanCount(),
+                selectedInterchangeFamilyCounts(),
                 rejectedCrossingPlanCount(),
                 conflictedCrossingPlanCount(),
                 interchangeRenderInvocationCount(),
@@ -178,6 +194,27 @@ public final class RoadGenerationRuntime {
 
     public static void invalidatePlans() {
         PLAN_CACHES.invalidateAll();
+    }
+
+    public static InterchangeExplanation explainInterchange(
+            IDimensionInfo provider,
+            LostCityProfile profile,
+            ChunkPoint chunk) {
+        Objects.requireNonNull(provider, "provider");
+        Objects.requireNonNull(profile, "profile");
+        Objects.requireNonNull(chunk, "chunk");
+        RoadOperationalSettings settings = RoadFixesServerConfig.settings();
+        List<InterchangeDesign> designs = InterchangeDesignResources.repository().snapshot();
+        String designFingerprint = InterchangeDesignFingerprint.of(designs);
+        RegionalInterchangeGeometryPlan plan = interchangePlanFor(
+                provider,
+                profile,
+                PlanningGrid.regionFor(chunk),
+                designs,
+                designFingerprint,
+                settings);
+        return plan.explanationAt(chunk).orElseGet(() ->
+                InterchangeExplanation.none(chunk));
     }
 
     public static boolean shouldSuppressBuilding(
@@ -324,12 +361,24 @@ public final class RoadGenerationRuntime {
         List<PlannedInterchangeGeometry> geometry = selected.interchanges().stream()
                 .map(GEOMETRY_PLANNER::create)
                 .toList();
+        List<InterchangeExplanation> explanations = new ArrayList<>(
+                selected.interchanges().size()
+                        + selected.rejectedCrossings().size()
+                        + selected.conflictedCrossings().size());
+        selected.interchanges().forEach(interchange ->
+                explanations.add(InterchangeExplanation.selected(interchange)));
+        selected.rejectedCrossings().forEach(rejected ->
+                explanations.add(InterchangeExplanation.rejected(rejected)));
+        selected.conflictedCrossings().forEach(conflict ->
+                explanations.add(InterchangeExplanation.conflicted(conflict)));
 
         INTERCHANGE_REGIONS_PLANNED.incrementAndGet();
         REJECTED_CROSSINGS_PLANNED.addAndGet(selected.rejectedCrossings().size());
         CONFLICTED_CROSSINGS_PLANNED.addAndGet(selected.conflictedCrossings().size());
         if (!geometry.isEmpty()) {
             long previous = SELECTED_INTERCHANGES_PLANNED.getAndAdd(geometry.size());
+            geometry.forEach(interchange -> SELECTED_INTERCHANGES_BY_TYPE.incrementAndGet(
+                    interchange.layout().design().type().ordinal()));
             if (previous == 0 && settings.logFirstInterchangeSelection()) {
                 PlannedInterchangeGeometry first = geometry.getFirst();
                 LostCitiesRoadFixes.LOGGER.info(
@@ -343,7 +392,8 @@ public final class RoadGenerationRuntime {
                 key,
                 geometry,
                 selected.rejectedCrossings().size(),
-                selected.conflictedCrossings().size());
+                selected.conflictedCrossings().size(),
+                explanations);
     }
 
     private static RoadPlanKey keyFor(
@@ -375,8 +425,8 @@ public final class RoadGenerationRuntime {
             LostCityProfile profile,
             String designFingerprint,
             RoadOperationalSettings settings) {
-        return "runtime-interchanges-v3|professional-terminals-v1|site-envelope-v1|"
-                + "dense-core-reservations-v1|"
+        return "runtime-interchanges-v4|professional-terminals-v1|site-envelope-v2|"
+                + "compiled-corridor-reservations-v1|physical-structure-levels-v1|"
                 + roadRulesFingerprint(profile, settings)
                 + '|'
                 + designFingerprint;
