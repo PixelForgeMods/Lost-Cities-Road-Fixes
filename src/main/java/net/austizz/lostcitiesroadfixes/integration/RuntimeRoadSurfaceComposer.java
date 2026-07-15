@@ -6,6 +6,7 @@ import net.austizz.lostcitiesroadfixes.interchange.render.VerticalClearanceSurfa
 import net.austizz.lostcitiesroadfixes.render.ChunkRoadSurface;
 import net.austizz.lostcitiesroadfixes.render.ElevatedRoadTile;
 import net.austizz.lostcitiesroadfixes.render.RoadSurfaceRasterizer;
+import net.austizz.lostcitiesroadfixes.render.RoadSurfaceClearanceValidator;
 import net.austizz.lostcitiesroadfixes.road.ChunkPoint;
 import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
 
@@ -19,6 +20,9 @@ public final class RuntimeRoadSurfaceComposer {
             new InterchangeSurfaceRasterizer();
     private final VerticalClearanceSurfaceMerger protectedInterchangeMerger =
             new VerticalClearanceSurfaceMerger(
+                    RoadDesignStandard.DEFAULT.minimumVehicleClearanceBlocks());
+    private final RoadSurfaceClearanceValidator clearanceValidator =
+            new RoadSurfaceClearanceValidator(
                     RoadDesignStandard.DEFAULT.minimumVehicleClearanceBlocks());
 
     public ChunkRoadSurface compose(
@@ -38,7 +42,9 @@ public final class RuntimeRoadSurfaceComposer {
                         .toList());
         ChunkRoadSurface interchangeSurface = interchangeRasterizer.rasterize(
                 targetChunk, geometry);
-        return protectedInterchangeMerger.merge(
+        ChunkRoadSurface composed = protectedInterchangeMerger.merge(
                 targetChunk, unaffectedSurface, interchangeSurface);
+        clearanceValidator.requireSafe(composed);
+        return composed;
     }
 }

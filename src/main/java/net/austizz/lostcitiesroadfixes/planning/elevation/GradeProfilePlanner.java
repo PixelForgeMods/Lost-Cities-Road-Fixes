@@ -23,6 +23,29 @@ public final class GradeProfilePlanner {
         return Math.toIntExact(ceilDiv(scaledRun, standard.maximumRiseHalfBlocks()));
     }
 
+    /**
+     * Returns the elevation reached after travelling inward from the native road
+     * along the shortest grade permitted by this design standard. Once that
+     * minimum transition is complete, the profile remains at the target
+     * elevation.
+     */
+    public HalfBlockElevation elevationOnMinimumRun(
+            HalfBlockElevation start,
+            HalfBlockElevation end,
+            int inwardDistanceBlocks) {
+        Objects.requireNonNull(start, "start");
+        Objects.requireNonNull(end, "end");
+        if (inwardDistanceBlocks < 0) {
+            throw new IllegalArgumentException("Inward distance cannot be negative");
+        }
+
+        int minimumRun = minimumRunBlocks(start, end);
+        if (minimumRun == 0 || inwardDistanceBlocks >= minimumRun) {
+            return end;
+        }
+        return elevationAt(start, end, minimumRun, inwardDistanceBlocks);
+    }
+
     public GradePlanResult plan(
             HalfBlockElevation start,
             HalfBlockElevation end,
@@ -56,21 +79,29 @@ public final class GradeProfilePlanner {
             HalfBlockElevation end,
             int run) {
         List<HalfBlockElevation> samples = new ArrayList<>(run + 1);
-        long delta = (long) end.halfBlocks() - start.halfBlocks();
-        long magnitude = Math.abs(delta);
 
         for (int distance = 0; distance <= run; distance++) {
-            long halfBlocks;
-            if (delta >= 0) {
-                long progress = run == 0 ? 0 : (long) distance * magnitude / run;
-                halfBlocks = (long) start.halfBlocks() + progress;
-            } else {
-                long remaining = run == 0 ? 0 : (long) (run - distance) * magnitude / run;
-                halfBlocks = (long) end.halfBlocks() + remaining;
-            }
-            samples.add(new HalfBlockElevation(Math.toIntExact(halfBlocks)));
+            samples.add(elevationAt(start, end, run, distance));
         }
         return samples;
+    }
+
+    private static HalfBlockElevation elevationAt(
+            HalfBlockElevation start,
+            HalfBlockElevation end,
+            int run,
+            int distance) {
+        long delta = (long) end.halfBlocks() - start.halfBlocks();
+        long magnitude = Math.abs(delta);
+        long halfBlocks;
+        if (delta >= 0) {
+            long progress = run == 0 ? 0 : (long) distance * magnitude / run;
+            halfBlocks = (long) start.halfBlocks() + progress;
+        } else {
+            long remaining = run == 0 ? 0 : (long) (run - distance) * magnitude / run;
+            halfBlocks = (long) end.halfBlocks() + remaining;
+        }
+        return new HalfBlockElevation(Math.toIntExact(halfBlocks));
     }
 
     private static long ceilDiv(long dividend, long divisor) {

@@ -2,7 +2,9 @@ package net.austizz.lostcitiesroadfixes.interchange.layout;
 
 import net.austizz.lostcitiesroadfixes.interchange.geometry.PlanarPoint;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.RoadHeading;
+import net.austizz.lostcitiesroadfixes.planning.elevation.GradeProfilePlanner;
 import net.austizz.lostcitiesroadfixes.road.HalfBlockElevation;
+import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
 
 import java.util.Objects;
 
@@ -16,6 +18,8 @@ public record InterchangeGeometrySite(
     private static final double LEGACY_LANE_OFFSET = 8.0;
     private static final double OUTER_THROUGH_LANE_OFFSET = 12.0;
     private static final double AUXILIARY_LANE_OFFSET = 21.0;
+    private static final GradeProfilePlanner GRADE_PROFILE_PLANNER =
+            new GradeProfilePlanner(RoadDesignStandard.DEFAULT);
 
     public InterchangeGeometrySite {
         Objects.requireNonNull(center, "center");
@@ -118,19 +122,12 @@ public record InterchangeGeometrySite(
             case NORTH, SOUTH -> zRoadNativeElevation;
         };
         HalfBlockElevation centerElevation = centerElevation(direction);
-        if (distanceFromCenter == approachRunBlocks) {
-            return nativeElevation;
-        }
-        double inwardProgress = (approachRunBlocks - distanceFromCenter)
-                / approachRunBlocks;
-        long delta = (long) centerElevation.halfBlocks()
-                - nativeElevation.halfBlocks();
-        long progressedHalfBlocks = (long) StrictMath.floor(
-                inwardProgress * StrictMath.abs(delta) + 1.0e-12);
-        long halfBlocks = delta >= 0
-                ? (long) nativeElevation.halfBlocks() + progressedHalfBlocks
-                : (long) nativeElevation.halfBlocks() - progressedHalfBlocks;
-        return new HalfBlockElevation(Math.toIntExact(halfBlocks));
+        int inwardDistance = (int) StrictMath.floor(
+                approachRunBlocks - distanceFromCenter + 1.0e-12);
+        return GRADE_PROFILE_PLANNER.elevationOnMinimumRun(
+                nativeElevation,
+                centerElevation,
+                inwardDistance);
     }
 
     public HalfBlockElevation centerElevation(ApproachDirection direction) {

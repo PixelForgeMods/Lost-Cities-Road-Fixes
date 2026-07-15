@@ -47,6 +47,11 @@ class InterchangeLayoutFactoryTest {
             640,
             new HalfBlockElevation(140),
             new HalfBlockElevation(188));
+    private static final InterchangeGeometrySite CUSTOM_SITE = new InterchangeGeometrySite(
+            new PlanarPoint(1_024.0, -2_048.0),
+            640,
+            new HalfBlockElevation(140),
+            new HalfBlockElevation(154));
 
     private final InterchangeLayoutFactory factory =
             new InterchangeLayoutFactory(RoadDesignStandard.DEFAULT);
@@ -299,13 +304,19 @@ class InterchangeLayoutFactoryTest {
                 graded.auxiliaryPort(
                         ApproachDirection.WEST,
                         TrafficFlow.INBOUND,
-                        320).elevation());
+                        544).elevation());
+        assertEquals(
+                new HalfBlockElevation(164),
+                graded.auxiliaryPort(
+                        ApproachDirection.WEST,
+                        TrafficFlow.INBOUND,
+                        448).elevation());
         assertEquals(
                 new HalfBlockElevation(168),
                 graded.auxiliaryPort(
                         ApproachDirection.NORTH,
                         TrafficFlow.OUTBOUND,
-                        320).elevation());
+                        576).elevation());
     }
 
     @Test
@@ -590,23 +601,46 @@ class InterchangeLayoutFactoryTest {
     void compilesCustomMovementFormsAndPropertiesToExactNativePorts() {
         InterchangeDesign design = customFourWayDesign();
 
-        InterchangeLayout layout = factory.create(design, SITE);
+        InterchangeLayout layout = factory.create(design, CUSTOM_SITE);
 
         InterchangeConnection direct = connection(
                 layout, ApproachDirection.WEST, ApproachDirection.SOUTH);
         assertEquals(RampForm.DIRECT, direct.form());
         assertEquals(RampControl.YIELD, direct.control());
         assertEquals(11, direct.route().widthBlocks());
-        assertEquals(1, direct.structureLevel());
+        assertEquals(2, direct.structureLevel());
 
-        InterchangeConnection loop = connection(
-                layout, ApproachDirection.WEST, ApproachDirection.NORTH);
-        assertEquals(RampForm.LOOP, loop.form());
-        assertEquals(RampControl.FREE_FLOW, loop.control());
-        assertEquals(10, loop.route().widthBlocks());
-        assertEquals(2, loop.structureLevel());
+        InterchangeConnection upperTurn = connection(
+                layout, ApproachDirection.NORTH, ApproachDirection.EAST);
+        assertEquals(RampForm.DIRECT, upperTurn.form());
+        assertEquals(RampControl.SIGNALIZED, upperTurn.control());
+        assertEquals(8, upperTurn.route().widthBlocks());
+        assertEquals(2, upperTurn.structureLevel());
+        assertEquals(
+                CUSTOM_SITE.zRoadCenterElevation(),
+                direct.route().centerline().elevationAt(
+                        direct.route().centerline().lengthBlocks() / 2.0),
+                "structure_level 2 must occupy the upper physical tier in the core");
 
         assertExactPorts(layout);
+    }
+
+    @Test
+    void rejectsCustomStructureLevelThatCannotBeReachedAtTheLegalGrade() {
+        InterchangeDesign design = customFourWayDesign();
+        InterchangeGeometrySite tooSteep = new InterchangeGeometrySite(
+                new PlanarPoint(0.0, 0.0),
+                352,
+                new HalfBlockElevation(140),
+                new HalfBlockElevation(240),
+                new HalfBlockElevation(140),
+                new HalfBlockElevation(240));
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> factory.create(design, tooSteep));
+
+        assertTrue(error.getMessage().contains("grade requires"), error::getMessage);
     }
 
     @Test
@@ -617,7 +651,7 @@ class InterchangeLayoutFactoryTest {
                 ApproachDirection.SOUTH,
                 ApproachDirection.WEST);
 
-        InterchangeLayout layout = factory.create(design, SITE, approaches);
+        InterchangeLayout layout = factory.create(design, CUSTOM_SITE, approaches);
 
         assertEquals(approaches, layout.approaches());
         assertEquals(6, layout.connections().size());
@@ -656,24 +690,25 @@ class InterchangeLayoutFactoryTest {
         List<InterchangeMovementBlueprint> movements = new ArrayList<>();
         for (ApproachDirection from : ApproachDirection.values()) {
             movements.add(blueprint(from, MovementKind.STRAIGHT, RampForm.MAINLINE,
-                    RampControl.FREE_FLOW, 8, 1));
+                    RampControl.FREE_FLOW, 8,
+                    from == ApproachDirection.NORTH || from == ApproachDirection.SOUTH
+                            ? 2 : 1));
             movements.add(blueprint(from, MovementKind.RIGHT, RampForm.DIRECT,
-                    RampControl.YIELD, from == ApproachDirection.WEST ? 11 : 8, 1));
-            boolean loop = from == ApproachDirection.WEST;
+                    RampControl.YIELD, from == ApproachDirection.WEST ? 11 : 8, 2));
             movements.add(blueprint(from, MovementKind.LEFT,
-                    loop ? RampForm.LOOP : RampForm.DIRECT,
-                    loop ? RampControl.FREE_FLOW : RampControl.SIGNALIZED,
-                    loop ? 10 : 8,
+                    RampForm.DIRECT,
+                    RampControl.SIGNALIZED,
+                    8,
                     2));
         }
         return design(
                 "example:custom_four_way",
-                InterchangeType.PARTIAL_CLOVERLEAF,
+                InterchangeType.DIAMOND,
                 JunctionForm.FOUR_WAY,
                 2,
-                true,
                 false,
-                5,
+                false,
+                4,
                 movements);
     }
 
@@ -695,7 +730,7 @@ class InterchangeLayoutFactoryTest {
                         kind == MovementKind.STRAIGHT ? RampForm.MAINLINE : RampForm.DIRECT,
                         RampControl.FREE_FLOW,
                         from == ApproachDirection.WEST && kind == MovementKind.RIGHT ? 13 : 8,
-                        kind == MovementKind.LEFT ? 2 : 1));
+                        2));
             }
         }
         return design(
@@ -722,9 +757,9 @@ class InterchangeLayoutFactoryTest {
                 InterchangeDesignId.parse(id),
                 type,
                 form,
-                64,
+                320,
                 2,
-                112,
+                352,
                 levels,
                 loops,
                 allFreeFlow,

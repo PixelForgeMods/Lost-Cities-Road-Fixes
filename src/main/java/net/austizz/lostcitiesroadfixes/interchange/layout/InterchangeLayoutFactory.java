@@ -28,6 +28,7 @@ public final class InterchangeLayoutFactory {
     private static final double AUXILIARY_LATERAL_SHIFT_BLOCKS = 9.0;
     private static final double RAMP_BRANCH_LATERAL_SHIFT_BLOCKS = 10.0;
     private static final double RAMP_GRADE_SEPARATION_BUFFER_BLOCKS = 4.0;
+    private static final double CUSTOM_ROUTE_CLEARANCE_LOCK_BLOCKS = 52.0;
     private static final int CLOVERLEAF_LOOP_TANGENT_BLOCKS = 16;
     private static final int CLOVERLEAF_INNER_GRADE_LOCK_BLOCKS = 4;
     private static final double STACK_SHARED_TRUNK_BLOCKS = 288.0;
@@ -103,7 +104,7 @@ public final class InterchangeLayoutFactory {
             InterchangeGeometrySite site,
             ApproachDirection missingApproach,
             InterchangeGeometryBlueprint geometry) {
-        List<InterchangeConnection> result = new ArrayList<>(geometry.movements().size());
+        List<BlueprintRouteDraft> drafts = new ArrayList<>(geometry.movements().size());
         for (InterchangeMovementBlueprint blueprint : geometry.movements()) {
             InterchangeMovement movement = rotate(
                     blueprint.movement(), missingApproach);
@@ -114,14 +115,189 @@ public final class InterchangeLayoutFactory {
                 case LOOP -> loopTurn(
                         design, site, movement, blueprint.widthBlocks());
             };
+            drafts.add(new BlueprintRouteDraft(movement, blueprint, route));
+        }
+
+        List<InterchangeConnection> result = new ArrayList<>(drafts.size());
+        for (BlueprintRouteDraft draft : drafts) {
+            InterchangeMovementBlueprint blueprint = draft.blueprint();
+            RampRoute route = draft.route();
+            route = applyBlueprintStructureLevel(
+                    design,
+                    site,
+                    draft.movement(),
+                    blueprint,
+                    route,
+                    customDepartureLock(draft, drafts),
+                    customArrivalLock(draft, drafts));
             result.add(new InterchangeConnection(
-                    movement,
+                    draft.movement(),
                     route,
                     blueprint.form(),
                     blueprint.control(),
                     blueprint.structureLevel()));
         }
+        requireCustomRouteClearance(design, result);
         return List.copyOf(result);
+    }
+
+    private RampRoute applyBlueprintStructureLevel(
+            InterchangeDesign design,
+            InterchangeGeometrySite site,
+            InterchangeMovement movement,
+            InterchangeMovementBlueprint blueprint,
+            RampRoute route,
+            double departureLock,
+            double arrivalLock) {
+        HalfBlockElevation tier = structureLevelElevation(
+                site, design.structureLevels(), blueprint.structureLevel());
+        if (blueprint.form() == RampForm.MAINLINE) {
+            // Mainline geometry is supplied by the surveyed arterial itself;
+            // structure levels physically profile only authored ramp movements.
+            return route;
+        }
+
+        RampCenterline centerline = route.centerline();
+        HalfBlockElevation start = centerline.startElevation();
+        HalfBlockElevation end = centerline.endElevation();
+        int departureGradeRun = gradePlanner.minimumRunBlocks(start, tier);
+        int arrivalGradeRun = gradePlanner.minimumRunBlocks(tier, end);
+        double departureGradeStart = departureLock;
+        double departureGradeEnd = departureGradeStart + departureGradeRun;
+        double arrivalGradeEnd = centerline.lengthBlocks() - arrivalLock;
+        double arrivalGradeStart = arrivalGradeEnd - arrivalGradeRun;
+        double coreStation = centerline.lengthBlocks() / 2.0;
+        if (departureGradeEnd > arrivalGradeStart + 1.0e-9
+                || departureGradeEnd > coreStation + 1.0e-9
+                || arrivalGradeStart < coreStation - 1.0e-9) {
+            throw new IllegalArgumentException(
+                    design.id() + " movement " + movement
+                            + " cannot safely reach structure level "
+                            + blueprint.structureLevel() + ": needs "
+                            + (departureGradeRun + arrivalGradeRun)
+                            + " graded blocks between terminal locks "
+                            + String.format(
+                                    java.util.Locale.ROOT,
+                                    "%.3f/%.3f",
+                                    departureLock,
+                                    arrivalLock)
+                            + " but route length is "
+                            + String.format(
+                                    java.util.Locale.ROOT,
+                                    "%.3f",
+                                    centerline.lengthBlocks()));
+        }
+
+        List<RampElevationKeyframe> profile = new ArrayList<>();
+        appendKeyframe(profile, 0.0, start);
+        appendKeyframe(profile, departureGradeStart, start);
+        appendKeyframe(profile, departureGradeEnd, tier);
+        appendKeyframe(profile, arrivalGradeStart, tier);
+        appendKeyframe(profile, arrivalGradeEnd, end);
+        appendKeyframe(profile, centerline.lengthBlocks(), end);
+        return new RampRoute(
+                centerline.withElevationProfile(profile),
+                route.widthBlocks());
+    }
+
+    private static double customDepartureLock(
+            BlueprintRouteDraft draft,
+            List<BlueprintRouteDraft> drafts) {
+        if (draft.blueprint().form() == RampForm.MAINLINE) {
+            return TERMINAL_GRADE_LOCK_BLOCKS;
+        }
+        double lock = TERMINAL_GRADE_LOCK_BLOCKS;
+        for (BlueprintRouteDraft candidate : drafts) {
+            if (candidate.blueprint().form() == RampForm.MAINLINE
+                    && candidate.movement().from() == draft.movement().from()) {
+                lock = StrictMath.max(
+                        lock,
+                        sharedDepartureRun(draft.route(), candidate.route()).leftBlocks()
+                                + CUSTOM_ROUTE_CLEARANCE_LOCK_BLOCKS);
+            }
+        }
+        return lock;
+    }
+
+    private static double customArrivalLock(
+            BlueprintRouteDraft draft,
+            List<BlueprintRouteDraft> drafts) {
+        if (draft.blueprint().form() == RampForm.MAINLINE) {
+            return TERMINAL_GRADE_LOCK_BLOCKS;
+        }
+        double lock = TERMINAL_GRADE_LOCK_BLOCKS;
+        for (BlueprintRouteDraft candidate : drafts) {
+            if (candidate.blueprint().form() == RampForm.MAINLINE
+                    && candidate.movement().to() == draft.movement().to()) {
+                lock = StrictMath.max(
+                        lock,
+                        sharedArrivalRun(draft.route(), candidate.route()).leftBlocks()
+                                + CUSTOM_ROUTE_CLEARANCE_LOCK_BLOCKS);
+            }
+        }
+        return lock;
+    }
+
+    private static HalfBlockElevation structureLevelElevation(
+            InterchangeGeometrySite site,
+            int structureLevels,
+            int structureLevel) {
+        if (structureLevel < 1 || structureLevel > structureLevels) {
+            throw new IllegalArgumentException(
+                    "Structure level must be between 1 and " + structureLevels);
+        }
+        HalfBlockElevation lower = lowerCenterElevation(site);
+        if (structureLevels == 1) {
+            return lower;
+        }
+        HalfBlockElevation upper = upperCenterElevation(site);
+        long span = (long) upper.halfBlocks() - lower.halfBlocks();
+        long offset = Math.multiplyExact((long) structureLevel - 1L, span)
+                / (structureLevels - 1L);
+        return lower.plusHalfBlocks(Math.toIntExact(offset));
+    }
+
+    private void requireCustomRouteClearance(
+            InterchangeDesign design,
+            List<InterchangeConnection> connections) {
+        int minimumSeparationHalfBlocks = Math.multiplyExact(
+                standard.minimumVehicleClearanceBlocks(), 2);
+        for (int leftIndex = 0; leftIndex < connections.size(); leftIndex++) {
+            InterchangeConnection left = connections.get(leftIndex);
+            for (int rightIndex = leftIndex + 1;
+                    rightIndex < connections.size();
+                    rightIndex++) {
+                InterchangeConnection right = connections.get(rightIndex);
+                double overlap = (left.route().widthBlocks()
+                        + right.route().widthBlocks()) / 2.0 - 0.5;
+                for (var leftSample : left.route().centerline().samples()) {
+                    RouteProximity nearest = nearestPoint(
+                            right.route(), leftSample.point());
+                    if (nearest.distanceBlocks() >= overlap) {
+                        continue;
+                    }
+                    int rightElevation = right.route().centerline()
+                            .elevationAt(nearest.stationBlocks()).halfBlocks();
+                    int separation = StrictMath.abs(
+                            leftSample.elevation().halfBlocks() - rightElevation);
+                    if (separation > 0
+                            && separation < minimumSeparationHalfBlocks) {
+                        throw new IllegalArgumentException(
+                                design.id() + " has unsafe custom structure levels between "
+                                        + left.movement() + " and " + right.movement()
+                                        + " near station "
+                                        + String.format(
+                                                java.util.Locale.ROOT,
+                                                "%.1f/%.1f",
+                                                leftSample.stationBlocks(),
+                                                nearest.stationBlocks())
+                                        + ": elevations are "
+                                        + leftSample.elevation().halfBlocks() + "/"
+                                        + rightElevation + " half-blocks");
+                    }
+                }
+            }
+        }
     }
 
     private List<ConnectionDraft> createDrafts(
@@ -273,7 +449,7 @@ public final class InterchangeLayoutFactory {
                 TrafficFlow.INBOUND,
                 terminalDistance).elevation();
         elevationProfile.add(new RampElevationKeyframe(
-                departureTerminalStation, departureTerminalElevation));
+                departureTerminalStation - 1.0, departureTerminalElevation));
         elevationProfile.add(new RampElevationKeyframe(
                 departureTerminalStation + TERMINAL_GRADE_LOCK_BLOCKS,
                 departureTerminalElevation));
@@ -1441,12 +1617,12 @@ public final class InterchangeLayoutFactory {
         if (!profile.isEmpty()) {
             RampElevationKeyframe previous = profile.getLast();
             if (station < previous.stationBlocks() - 1.0e-9) {
-                throw new IllegalArgumentException("Stack elevation keyframes moved backwards");
+                throw new IllegalArgumentException("Elevation keyframes moved backwards");
             }
             if (StrictMath.abs(station - previous.stationBlocks()) <= 1.0e-9) {
                 if (!previous.elevation().equals(elevation)) {
                     throw new IllegalArgumentException(
-                            "Stack elevation changes without horizontal grade run");
+                            "Elevation changes without horizontal grade run");
                 }
                 return;
             }
@@ -1533,6 +1709,12 @@ public final class InterchangeLayoutFactory {
             InterchangeMovement movement,
             RampRoute route,
             RampForm form) {
+    }
+
+    private record BlueprintRouteDraft(
+            InterchangeMovement movement,
+            InterchangeMovementBlueprint blueprint,
+            RampRoute route) {
     }
 
     private record StackTierPlan(

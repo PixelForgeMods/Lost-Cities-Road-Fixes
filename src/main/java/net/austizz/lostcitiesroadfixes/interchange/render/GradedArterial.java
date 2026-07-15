@@ -1,9 +1,11 @@
 package net.austizz.lostcitiesroadfixes.interchange.render;
 
 import net.austizz.lostcitiesroadfixes.planning.continuity.RoadAxis;
+import net.austizz.lostcitiesroadfixes.planning.elevation.GradeProfilePlanner;
 import net.austizz.lostcitiesroadfixes.render.ElevatedRoadTile;
 import net.austizz.lostcitiesroadfixes.render.RoadSurfacePosition;
 import net.austizz.lostcitiesroadfixes.road.HalfBlockElevation;
+import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
 
 import java.util.Objects;
 
@@ -16,6 +18,9 @@ public record GradedArterial(
         boolean positiveArm,
         HalfBlockElevation nativeElevation,
         HalfBlockElevation centerElevation) {
+    private static final GradeProfilePlanner GRADE_PROFILE_PLANNER =
+            new GradeProfilePlanner(RoadDesignStandard.DEFAULT);
+
     public GradedArterial {
         Objects.requireNonNull(axis, "axis");
         Objects.requireNonNull(nativeElevation, "nativeElevation");
@@ -52,17 +57,10 @@ public record GradedArterial(
             throw new IllegalArgumentException("Block is outside graded arterial arms");
         }
         int distance = StrictMath.abs(blockCoordinate - centerLongitudinalBlock());
-        if (distance == 0) {
-            return centerElevation;
-        }
-        long delta = (long) centerElevation.halfBlocks() - nativeElevation.halfBlocks();
-        long progress = (long) StrictMath.floor(
-                (approachRunBlocks - distance) * Math.abs(delta)
-                        / (double) approachRunBlocks + 1.0e-12);
-        long halfBlocks = delta >= 0
-                ? (long) nativeElevation.halfBlocks() + progress
-                : (long) nativeElevation.halfBlocks() - progress;
-        return new HalfBlockElevation(Math.toIntExact(halfBlocks));
+        return GRADE_PROFILE_PLANNER.elevationOnMinimumRun(
+                nativeElevation,
+                centerElevation,
+                approachRunBlocks - distance);
     }
 
     public boolean replaces(ElevatedRoadTile road) {

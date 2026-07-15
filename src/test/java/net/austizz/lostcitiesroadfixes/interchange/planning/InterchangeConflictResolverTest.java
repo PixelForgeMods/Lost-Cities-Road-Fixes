@@ -5,6 +5,10 @@ import net.austizz.lostcitiesroadfixes.interchange.InterchangeSelector;
 import net.austizz.lostcitiesroadfixes.interchange.JunctionForm;
 import net.austizz.lostcitiesroadfixes.interchange.TrafficDemand;
 import net.austizz.lostcitiesroadfixes.interchange.layout.ApproachDirection;
+import net.austizz.lostcitiesroadfixes.interchange.layout.InterchangeLayoutFactory;
+import net.austizz.lostcitiesroadfixes.interchange.render.InterchangeGeometryPlanner;
+import net.austizz.lostcitiesroadfixes.interchange.render.PlannedInterchangeGeometry;
+import net.austizz.lostcitiesroadfixes.integration.RuntimeRoadSurfaceComposer;
 import net.austizz.lostcitiesroadfixes.road.ChunkPoint;
 import net.austizz.lostcitiesroadfixes.road.HalfBlockElevation;
 import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
@@ -15,6 +19,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InterchangeConflictResolverTest {
@@ -62,7 +68,29 @@ class InterchangeConflictResolverTest {
     }
 
     @Test
-    void higherDemandWinsBeforeTheUnsignedSeedTieBreaker() {
+    void equalPriorityConflictWinnerDoesNotDependOnSelectionSeed() {
+        PlannedInterchange lowerCoordinateWithHighSeed = candidate(
+                new ChunkPoint(0, 0), Long.MAX_VALUE);
+        PlannedInterchange higherCoordinateWithLowSeed = candidate(
+                new ChunkPoint(8, 0), 0L);
+        PlannedInterchange lowerCoordinateWithLowSeed = candidate(
+                new ChunkPoint(0, 0), 0L);
+        PlannedInterchange higherCoordinateWithHighSeed = candidate(
+                new ChunkPoint(8, 0), Long.MAX_VALUE);
+
+        InterchangeConflictResolution first = RESOLVER.resolve(List.of(
+                higherCoordinateWithLowSeed,
+                lowerCoordinateWithHighSeed));
+        InterchangeConflictResolution second = RESOLVER.resolve(List.of(
+                higherCoordinateWithHighSeed,
+                lowerCoordinateWithLowSeed));
+
+        assertEquals(new ChunkPoint(0, 0), first.interchanges().getFirst().crossing().chunk());
+        assertEquals(new ChunkPoint(0, 0), second.interchanges().getFirst().crossing().chunk());
+    }
+
+    @Test
+    void higherDemandWinsBeforeTheCoordinateTieBreaker() {
         PlannedInterchange highDemand = candidate(
                 new ChunkPoint(0, 0), 99L, TrafficDemand.HIGH, true);
         PlannedInterchange regionalDemand = candidate(
@@ -79,7 +107,8 @@ class InterchangeConflictResolverTest {
     @Test
     void localPriorityMinimaCannotConflictAcrossAChain() {
         PlannedInterchange first = candidate(new ChunkPoint(0, 0), 1L);
-        PlannedInterchange middle = candidate(new ChunkPoint(8, 0), 3L);
+        PlannedInterchange middle = candidate(
+                new ChunkPoint(8, 0), 3L, TrafficDemand.REGIONAL, false);
         PlannedInterchange last = candidate(new ChunkPoint(16, 0), 2L);
 
         InterchangeConflictResolution resolution = RESOLVER.resolve(
@@ -95,8 +124,87 @@ class InterchangeConflictResolverTest {
     }
 
     @Test
-    void surveyHaloCoversTheLargestSelectableCorePair() {
-        assertEquals(34, RESOLVER.surveyMarginChunks());
+    void surveyHaloCoversTheLargestCompiledApproachPair() {
+        assertEquals(64, RESOLVER.surveyMarginChunks());
+    }
+
+    @Test
+    void rejectsOverlappingCompiledDiamondsWithIncompatibleSharedArterialGrades() {
+        PlannedInterchange raised = diamond(
+                new ChunkPoint(0, 0),
+                new CrossingDecks(
+                        new HalfBlockElevation(152),
+                        new HalfBlockElevation(140),
+                        new HalfBlockElevation(160),
+                        new HalfBlockElevation(140)));
+        PlannedInterchange nativeHeight = diamond(
+                new ChunkPoint(10, 0),
+                new CrossingDecks(
+                        new HalfBlockElevation(152),
+                        new HalfBlockElevation(164),
+                        new HalfBlockElevation(152),
+                        new HalfBlockElevation(172)));
+
+        InterchangeConflictResolution resolution = RESOLVER.resolve(
+                List.of(nativeHeight, raised));
+
+        assertEquals(1, resolution.interchanges().size());
+        assertEquals(1, resolution.conflicts().size());
+        assertTrue(RESOLVER.conflicts(raised, nativeHeight));
+    }
+
+    @Test
+    void permitsOverlappingCompiledCorridorsWhenTheSharedGradeIsIdentical() {
+        CrossingDecks decks = new CrossingDecks(
+                new HalfBlockElevation(152),
+                new HalfBlockElevation(164),
+                new HalfBlockElevation(152),
+                new HalfBlockElevation(172));
+        PlannedInterchange first = diamond(new ChunkPoint(0, 0), decks);
+        PlannedInterchange second = diamond(new ChunkPoint(10, 0), decks);
+
+        InterchangeConflictResolution resolution = RESOLVER.resolve(List.of(first, second));
+
+        assertEquals(2, resolution.interchanges().size());
+        assertTrue(resolution.conflicts().isEmpty());
+    }
+
+    @Test
+    void conflictResolutionRemovesTheUnsafeSharedCorridorBeforeComposition() {
+        PlannedInterchange raised = diamond(
+                new ChunkPoint(0, 0),
+                new CrossingDecks(
+                        new HalfBlockElevation(152),
+                        new HalfBlockElevation(140),
+                        new HalfBlockElevation(160),
+                        new HalfBlockElevation(140)));
+        PlannedInterchange nativeHeight = diamond(
+                new ChunkPoint(10, 0),
+                new CrossingDecks(
+                        new HalfBlockElevation(152),
+                        new HalfBlockElevation(164),
+                        new HalfBlockElevation(152),
+                        new HalfBlockElevation(172)));
+        InterchangeGeometryPlanner geometryPlanner = new InterchangeGeometryPlanner(
+                new InterchangeLayoutFactory(RoadDesignStandard.DEFAULT));
+        RuntimeRoadSurfaceComposer composer = new RuntimeRoadSurfaceComposer();
+        ChunkPoint overlapChunk = new ChunkPoint(5, 0);
+
+        List<PlannedInterchangeGeometry> unresolved = List.of(
+                geometryPlanner.create(raised),
+                geometryPlanner.create(nativeHeight));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> composer.compose(overlapChunk, List.of(), unresolved));
+
+        InterchangeConflictResolution resolution = RESOLVER.resolve(
+                List.of(nativeHeight, raised));
+        List<PlannedInterchangeGeometry> selected = resolution.interchanges().stream()
+                .map(geometryPlanner::create)
+                .toList();
+        assertDoesNotThrow(
+                () -> composer.compose(overlapChunk, List.of(), selected));
+        assertEquals(1, resolution.conflicts().size());
     }
 
     private static PlannedInterchange candidate(ChunkPoint chunk, long seed) {
@@ -129,6 +237,31 @@ class InterchangeConflictResolverTest {
                 seed);
         InterchangeDecision decision = InterchangeSelector.withBuiltIns()
                 .select(crossing.selectionSite());
+        return new PlannedInterchange(crossing, decision);
+    }
+
+    private static PlannedInterchange diamond(ChunkPoint chunk, CrossingDecks decks) {
+        DetectedRoadCrossing crossing = new DetectedRoadCrossing(
+                chunk,
+                JunctionForm.FOUR_WAY,
+                1,
+                0,
+                EnumSet.allOf(ApproachDirection.class),
+                320,
+                64,
+                2,
+                TrafficDemand.REGIONAL,
+                2,
+                false,
+                false,
+                decks,
+                1L);
+        InterchangeDecision decision = InterchangeSelector.withBuiltIns()
+                .select(crossing.selectionSite());
+        assertEquals(
+                net.austizz.lostcitiesroadfixes.interchange.InterchangeType.DIAMOND,
+                decision.selected().orElseThrow().type(),
+                decision::diagnostic);
         return new PlannedInterchange(crossing, decision);
     }
 }
