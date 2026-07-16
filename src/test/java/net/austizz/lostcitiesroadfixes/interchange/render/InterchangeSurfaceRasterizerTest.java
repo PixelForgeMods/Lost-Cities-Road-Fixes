@@ -1,7 +1,10 @@
 package net.austizz.lostcitiesroadfixes.interchange.render;
 
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeDecision;
+import net.austizz.lostcitiesroadfixes.interchange.InterchangeCatalogue;
+import net.austizz.lostcitiesroadfixes.interchange.InterchangeDesign;
 import net.austizz.lostcitiesroadfixes.interchange.InterchangeSelector;
+import net.austizz.lostcitiesroadfixes.interchange.InterchangeType;
 import net.austizz.lostcitiesroadfixes.interchange.JunctionForm;
 import net.austizz.lostcitiesroadfixes.interchange.TrafficDemand;
 import net.austizz.lostcitiesroadfixes.interchange.layout.ApproachDirection;
@@ -12,6 +15,7 @@ import net.austizz.lostcitiesroadfixes.interchange.layout.RampForm;
 import net.austizz.lostcitiesroadfixes.interchange.planning.CrossingDecks;
 import net.austizz.lostcitiesroadfixes.interchange.planning.DetectedRoadCrossing;
 import net.austizz.lostcitiesroadfixes.interchange.planning.PlannedInterchange;
+import net.austizz.lostcitiesroadfixes.integration.RuntimeRoadSurfaceComposer;
 import net.austizz.lostcitiesroadfixes.planning.continuity.RoadAxis;
 import net.austizz.lostcitiesroadfixes.render.ChunkRoadSurface;
 import net.austizz.lostcitiesroadfixes.render.ElevatedRoadTile;
@@ -24,12 +28,14 @@ import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
 import org.junit.jupiter.api.Test;
 
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -192,6 +198,108 @@ class InterchangeSurfaceRasterizerTest {
         assertFalse(fourWay.replaces(tile(new ChunkPoint(19, 1), RoadAxis.X, 140)));
         assertFalse(threeWay.replaces(tile(new ChunkPoint(0, -1), RoadAxis.Z, 152)));
         assertTrue(threeWay.replaces(tile(new ChunkPoint(0, 1), RoadAxis.Z, 152)));
+    }
+
+    @Test
+    void everyBuiltInComposesSafelyAcrossItsFullCompiledEnvelope() {
+        RuntimeRoadSurfaceComposer composer = new RuntimeRoadSurfaceComposer();
+        for (InterchangeDesign design : InterchangeCatalogue.builtIns()) {
+            int upperHalfBlocks = switch (design.type()) {
+                case STACK -> 188;
+                case THREE_WAY_DIRECTIONAL -> 168;
+                default -> 160;
+            };
+            Set<ApproachDirection> approaches = design.form() == JunctionForm.THREE_WAY
+                    ? EnumSet.of(
+                            ApproachDirection.WEST,
+                            ApproachDirection.EAST,
+                            ApproachDirection.SOUTH)
+                    : EnumSet.allOf(ApproachDirection.class);
+            CrossingDecks decks = new CrossingDecks(
+                    elevation(140),
+                    elevation(upperHalfBlocks),
+                    elevation(140),
+                    elevation(upperHalfBlocks));
+            DetectedRoadCrossing crossing = new DetectedRoadCrossing(
+                    new ChunkPoint(0, 0),
+                    design.form(),
+                    0,
+                    design.type() == InterchangeType.STACK ? 4 : 1,
+                    approaches,
+                    640,
+                    512,
+                    4,
+                    TrafficDemand.LOCAL,
+                    4,
+                    true,
+                    false,
+                    decks,
+                    1L);
+            InterchangeDecision decision = new InterchangeSelector(
+                    List.of(design), STANDARD).select(crossing.selectionSite());
+            assertEquals(
+                    design,
+                    decision.selected().orElseThrow(() -> new AssertionError(
+                            design.type() + ": " + decision.diagnostic())),
+                    decision::diagnostic);
+            PlannedInterchangeGeometry geometry = geometryPlanner.create(
+                    new PlannedInterchange(crossing, decision));
+            int chunkRadius = Math.floorDiv(
+                    decision.selectedApproachRunBlocks() + 15, 16);
+
+            for (int z = -chunkRadius; z <= chunkRadius; z++) {
+                for (int x = -chunkRadius; x <= chunkRadius; x++) {
+                    ChunkPoint chunk = new ChunkPoint(x, z);
+                    assertDoesNotThrow(
+                            () -> composer.compose(
+                                    chunk,
+                                    List.of(),
+                                    List.of(geometry)),
+                            () -> design.type() + " failed in " + chunk);
+                }
+            }
+
+            Map<ChunkPoint, ChunkRoadSurface> routeSurfaces = new HashMap<>();
+            Map<net.austizz.lostcitiesroadfixes.interchange.geometry.RampRoute, String>
+                    routeLabels = new HashMap<>();
+            geometry.layout().connections().forEach(connection -> routeLabels.put(
+                    connection.route(), connection.movement() + " " + connection.form()));
+            geometry.layout().auxiliaryLanes().forEach(lane -> routeLabels.put(
+                    lane.route(), lane.mainlineMovement() + " AUXILIARY"));
+            geometry.rampAndAuxiliaryRoutes().forEach(route -> {
+                String routeLabel = routeLabels.getOrDefault(route, "unknown route");
+                route.centerline().samples().forEach(sample -> {
+                        int blockX = (int) StrictMath.floor(sample.point().x());
+                        int blockZ = (int) StrictMath.floor(sample.point().z());
+                        ChunkPoint chunk = new ChunkPoint(
+                                Math.floorDiv(blockX, 16),
+                                Math.floorDiv(blockZ, 16));
+                        ChunkRoadSurface surface = routeSurfaces.computeIfAbsent(
+                                chunk,
+                                ignored -> composer.compose(
+                                        chunk,
+                                        List.of(),
+                                        List.of(geometry)));
+                        int nearestElevationDifference = surface.cells().stream()
+                                .filter(cell -> cell.position().x() == blockX)
+                                .filter(cell -> cell.position().z() == blockZ)
+                                .mapToInt(cell -> StrictMath.abs(
+                                        cell.position().elevation().halfBlocks()
+                                                - sample.elevation().halfBlocks()))
+                                .min()
+                                .orElse(Integer.MAX_VALUE);
+                        assertTrue(
+                                nearestElevationDifference
+                                        < STANDARD.minimumVehicleClearanceBlocks() * 2,
+                                () -> design.type() + " lost route centerline near "
+                                        + blockX + ',' + blockZ + " at "
+                                        + sample.elevation().halfBlocks()
+                                        + " half-blocks on " + routeLabel
+                                        + "; nearest surface differs by "
+                                        + nearestElevationDifference);
+                });
+            });
+        }
     }
 
     private static PlannedInterchange selected(boolean threeWay) {

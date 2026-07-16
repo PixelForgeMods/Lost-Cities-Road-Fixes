@@ -48,6 +48,48 @@ class RampSurfaceRasterizerTest {
     }
 
     @Test
+    void overlappingPavementInsideClearanceBecomesOneConnectedSurface() {
+        RampRoute fartherLower = levelRoute(0.0, 7.0, 16, 140);
+        RampRoute nearerUpper = levelRoute(0.0, 9.0, 16, 141);
+
+        ChunkRoadSurface surface = rasterizer.rasterize(
+                new ChunkPoint(0, 0), List.of(fartherLower, nearerUpper));
+
+        assertFalse(surface.cellAt(8, 9, elevation(140)).isPresent());
+        assertTrue(surface.cellAt(8, 9, elevation(141)).isPresent());
+        assertEquals(1, surface.cells().stream()
+                .filter(cell -> cell.position().x() == 8)
+                .filter(cell -> cell.position().z() == 9)
+                .count());
+    }
+
+    @Test
+    void exactMinimumClearanceRemainsTwoPhysicalDecks() {
+        RampRoute lower = levelRoute(0.0, 8.0, 16, 140);
+        RampRoute upper = levelRoute(0.0, 8.0, 16, 154);
+
+        ChunkRoadSurface surface = rasterizer.rasterize(
+                new ChunkPoint(0, 0), List.of(lower, upper));
+
+        assertTrue(surface.cellAt(8, 8, elevation(140)).isPresent());
+        assertTrue(surface.cellAt(8, 8, elevation(154)).isPresent());
+    }
+
+    @Test
+    void intermediateRampCannotTransitivelyDeleteAClearDeck() {
+        RampRoute lower = levelRoute(0.0, 8.0, 16, 140);
+        RampRoute transition = levelRoute(0.0, 8.0, 16, 153);
+        RampRoute upper = levelRoute(0.0, 8.0, 16, 160);
+
+        ChunkRoadSurface surface = rasterizer.rasterize(
+                new ChunkPoint(0, 0), List.of(lower, transition, upper));
+
+        assertTrue(surface.cellAt(8, 8, elevation(140)).isPresent());
+        assertFalse(surface.cellAt(8, 8, elevation(153)).isPresent());
+        assertTrue(surface.cellAt(8, 8, elevation(160)).isPresent());
+    }
+
+    @Test
     void rasterizationIsDeterministicAndChunkBounded() {
         RampCenterline centerline = new RampPathBuilder(
                 RoadDesignStandard.DEFAULT,

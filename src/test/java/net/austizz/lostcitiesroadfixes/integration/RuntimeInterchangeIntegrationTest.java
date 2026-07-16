@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -113,6 +114,64 @@ class RuntimeInterchangeIntegrationTest {
         assertTrue(unsafeColumns.isEmpty(),
                 () -> "intersection decks conflict with interchange clearance: "
                         + unsafeColumns);
+    }
+
+    @Test
+    void compactDiamondSharedTurnsCannotAbortHighwayChunkComposition() {
+        DetectedRoadCrossing crossing = new DetectedRoadCrossing(
+                CENTER,
+                JunctionForm.FOUR_WAY,
+                0,
+                1,
+                EnumSet.allOf(ApproachDirection.class),
+                320,
+                64,
+                2,
+                TrafficDemand.REGIONAL,
+                2,
+                false,
+                false,
+                new CrossingDecks(
+                        elevation(142),
+                        elevation(154),
+                        elevation(142),
+                        elevation(162)),
+                1L);
+        InterchangeDecision decision = InterchangeSelector.withBuiltIns()
+                .select(crossing.selectionSite());
+        assertEquals(
+                net.austizz.lostcitiesroadfixes.interchange.InterchangeType.DIAMOND,
+                decision.selected().orElseThrow().type(),
+                decision::diagnostic);
+        PlannedInterchangeGeometry geometry = new InterchangeGeometryPlanner(
+                new InterchangeLayoutFactory(RoadDesignStandard.DEFAULT))
+                .create(new PlannedInterchange(crossing, decision));
+
+        ChunkRoadSurface surface = assertDoesNotThrow(() ->
+                new RuntimeRoadSurfaceComposer().compose(
+                        new ChunkPoint(-5, -2),
+                        List.of(),
+                        List.of(geometry)));
+
+        assertTrue(surface.cells().stream().anyMatch(cell ->
+                cell.position().x() == -68 && cell.position().z() == -28));
+    }
+
+    @Test
+    void straightThroughFallbackKeepsBothSafelyGradedMainlines() {
+        PlannedInterchangeGeometry geometry = geometry();
+
+        ChunkRoadSurface surface = new RuntimeRoadSurfaceComposer()
+                .composeStraightThrough(
+                        CENTER,
+                        List.of(
+                                tile(CENTER, RoadAxis.X, 140),
+                                tile(CENTER, RoadAxis.Z, 152)),
+                        List.of(geometry));
+
+        assertTrue(surface.cellAt(8, 8, elevation(140)).isPresent());
+        assertTrue(surface.cellAt(8, 8, elevation(160)).isPresent());
+        assertFalse(surface.cellAt(8, 8, elevation(152)).isPresent());
     }
 
     @Test

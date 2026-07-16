@@ -30,6 +30,7 @@ class RoadDiagnosticsSnapshotTest {
                 12,
                 13,
                 14,
+                15,
                 "example:requested",
                 "lostcitiesroadfixes:default",
                 4,
@@ -45,8 +46,10 @@ class RoadDiagnosticsSnapshotTest {
         assertTrue(lines.stream().anyMatch(line -> line.contains("diamond=5")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("cloverleaf=2")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("conflicted=9")));
-        assertTrue(lines.stream().anyMatch(line -> line.contains("roads=11")));
-        assertTrue(lines.stream().anyMatch(line -> line.contains("loadedDesigns=13")));
+        assertTrue(lines.stream().anyMatch(line ->
+                line.contains("straightThroughFallbacks=11")));
+        assertTrue(lines.stream().anyMatch(line -> line.contains("roads=12")));
+        assertTrue(lines.stream().anyMatch(line -> line.contains("loadedDesigns=14")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("example:requested")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("fallback=true")));
         assertTrue(lines.stream().anyMatch(line -> line.contains("maximumGapChunks=4")));
@@ -57,15 +60,15 @@ class RoadDiagnosticsSnapshotTest {
     @Test
     void rejectsNegativeCountersAndBlankThemeIds() {
         assertThrows(IllegalArgumentException.class, () -> new RoadDiagnosticsSnapshot(
-                true, -1, 0, 0, 0, 0, Map.of(), 0, 0, 0, 0, 0, 0, 0,
+                true, -1, 0, 0, 0, 0, Map.of(), 0, 0, 0, 0, 0, 0, 0, 0,
                 "a:b", "a:b", 1, 64, true));
         assertThrows(IllegalArgumentException.class, () -> new RoadDiagnosticsSnapshot(
-                true, 0, 0, 0, 0, 0, Map.of(), 0, 0, 0, 0, 0, 0, 0,
+                true, 0, 0, 0, 0, 0, Map.of(), 0, 0, 0, 0, 0, 0, 0, 0,
                 " ", "a:b", 1, 64, true));
         assertThrows(IllegalArgumentException.class, () -> new RoadDiagnosticsSnapshot(
                 true, 0, 0, 0, 0, 0,
                 Map.of(InterchangeType.DIAMOND, -1L),
-                0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0,
                 "a:b", "a:b", 1, 64, true));
     }
 }

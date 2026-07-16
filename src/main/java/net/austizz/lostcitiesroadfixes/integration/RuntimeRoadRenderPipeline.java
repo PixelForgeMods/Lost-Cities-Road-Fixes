@@ -35,4 +35,11 @@ public final class RuntimeRoadRenderPipeline {
             Collection<PlannedInterchangeGeometry> interchanges) {
         return composer.compose(targetChunk, nativeRoads, interchanges);
     }
+
+    public ChunkRoadSurface composeStraightThrough(
+            ChunkPoint targetChunk,
+            Collection<ElevatedRoadTile> nativeRoads,
+            Collection<PlannedInterchangeGeometry> interchanges) {
+        return composer.composeStraightThrough(targetChunk, nativeRoads, interchanges);
+    }
 }

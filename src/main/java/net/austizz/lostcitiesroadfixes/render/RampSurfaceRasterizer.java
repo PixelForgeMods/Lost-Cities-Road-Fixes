@@ -3,33 +3,42 @@ package net.austizz.lostcitiesroadfixes.render;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.RampCenterlineSample;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.RampRoute;
 import net.austizz.lostcitiesroadfixes.road.ChunkPoint;
+import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 public final class RampSurfaceRasterizer {
+    private static final int MINIMUM_SEPARATION_HALF_BLOCKS = Math.multiplyExact(
+            RoadDesignStandard.DEFAULT.minimumVehicleClearanceBlocks(), 2);
+
     public ChunkRoadSurface rasterize(ChunkPoint targetChunk, Collection<RampRoute> routes) {
         Objects.requireNonNull(targetChunk, "targetChunk");
         Objects.requireNonNull(routes, "routes");
 
-        Map<RoadSurfacePosition, RoadSurfaceRole> coverage = new HashMap<>();
+        Map<Column, List<CoverageCandidate>> coverage = new HashMap<>();
+        int routeOrdinal = 0;
         for (RampRoute route : routes) {
-            addRoute(targetChunk, route, coverage);
+            addRoute(targetChunk, route, routeOrdinal, coverage);
+            routeOrdinal++;
         }
 
-        List<RoadSurfaceCell> cells = new ArrayList<>(coverage.size());
-        coverage.forEach((position, role) -> cells.add(new RoadSurfaceCell(position, role)));
+        List<RoadSurfaceCell> cells = new ArrayList<>();
+        coverage.forEach((column, candidates) ->
+                addResolvedColumn(cells, column, candidates));
         return new ChunkRoadSurface(targetChunk, cells);
     }
 
     private static void addRoute(
             ChunkPoint chunk,
             RampRoute route,
-            Map<RoadSurfacePosition, RoadSurfaceRole> coverage) {
+            int routeOrdinal,
+            Map<Column, List<CoverageCandidate>> coverage) {
         double halfWidth = route.widthBlocks() / 2.0;
         double maximumDistanceSquared = halfWidth * halfWidth;
         if (!mayOverlap(chunk, route, halfWidth)) {
@@ -47,13 +56,60 @@ public final class RampSurfaceRasterizer {
                 RoadSurfaceRole role = distance >= halfWidth - 1.0
                         ? RoadSurfaceRole.SHOULDER
                         : RoadSurfaceRole.ASPHALT;
-                RoadSurfacePosition position = new RoadSurfacePosition(
-                        x,
-                        z,
-                        route.centerline().elevationAt(closest.stationBlocks()));
-                coverage.merge(position, role, RampSurfaceRasterizer::higherPriority);
+                Column column = new Column(x, z);
+                coverage.computeIfAbsent(column, ignored -> new ArrayList<>())
+                        .add(new CoverageCandidate(
+                                route.centerline().elevationAt(
+                                        closest.stationBlocks()).halfBlocks(),
+                                role,
+                                closest.distanceSquared(),
+                                routeOrdinal));
             }
         }
+    }
+
+    /**
+     * Overlapping ramp pavement inside one vehicle-clearance envelope is one
+     * connected surface, not a pair of stacked decks. Assign that block column
+     * to the nearest route while preserving genuinely separated structures.
+     */
+    private static void addResolvedColumn(
+            List<RoadSurfaceCell> cells,
+            Column column,
+            List<CoverageCandidate> candidates) {
+        List<CoverageCandidate> unresolved = new ArrayList<>(candidates);
+        while (!unresolved.isEmpty()) {
+            CoverageCandidate anchor = unresolved.stream()
+                    .min(Comparator
+                            .comparingDouble(CoverageCandidate::distanceSquared)
+                            .thenComparingInt(CoverageCandidate::routeOrdinal)
+                            .thenComparingInt(CoverageCandidate::elevationHalfBlocks))
+                    .orElseThrow();
+            List<CoverageCandidate> connectedSurface = unresolved.stream()
+                    .filter(candidate -> StrictMath.abs(
+                            candidate.elevationHalfBlocks()
+                                    - anchor.elevationHalfBlocks())
+                            < MINIMUM_SEPARATION_HALF_BLOCKS)
+                    .toList();
+            cells.add(resolveConnectedSurface(column, anchor, connectedSurface));
+            unresolved.removeAll(connectedSurface);
+        }
+    }
+
+    private static RoadSurfaceCell resolveConnectedSurface(
+            Column column,
+            CoverageCandidate anchor,
+            List<CoverageCandidate> candidates) {
+        RoadSurfaceRole role = candidates.stream()
+                .map(CoverageCandidate::role)
+                .reduce(anchor.role(), RampSurfaceRasterizer::higherPriority);
+        return new RoadSurfaceCell(
+                new RoadSurfacePosition(
+                        column.x(),
+                        column.z(),
+                        new net.austizz.lostcitiesroadfixes.road.HalfBlockElevation(
+                                anchor.elevationHalfBlocks())),
+                role);
     }
 
     private static boolean mayOverlap(ChunkPoint chunk, RampRoute route, double margin) {
@@ -124,5 +180,15 @@ public final class RampSurfaceRasterizer {
     }
 
     private record ClosestPoint(double distanceSquared, double stationBlocks) {
+    }
+
+    private record Column(int x, int z) {
+    }
+
+    private record CoverageCandidate(
+            int elevationHalfBlocks,
+            RoadSurfaceRole role,
+            double distanceSquared,
+            int routeOrdinal) {
     }
 }

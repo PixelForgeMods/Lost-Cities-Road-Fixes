@@ -19,6 +19,7 @@ public record RoadDiagnosticsSnapshot(
         long rejectedCrossings,
         long conflictedCrossings,
         long interchangeRenderInvocations,
+        long straightThroughFallbacks,
         int roadCacheSize,
         int interchangeCacheSize,
         int loadedDesigns,
@@ -47,6 +48,7 @@ public record RoadDiagnosticsSnapshot(
         requireNonNegative(rejectedCrossings, "rejectedCrossings");
         requireNonNegative(conflictedCrossings, "conflictedCrossings");
         requireNonNegative(interchangeRenderInvocations, "interchangeRenderInvocations");
+        requireNonNegative(straightThroughFallbacks, "straightThroughFallbacks");
         requireNonNegative(roadCacheSize, "roadCacheSize");
         requireNonNegative(interchangeCacheSize, "interchangeCacheSize");
         requireNonNegative(loadedDesigns, "loadedDesigns");
@@ -70,7 +72,8 @@ public record RoadDiagnosticsSnapshot(
                         + ", selected=" + selectedInterchanges
                         + ", rejected=" + rejectedCrossings
                         + ", conflicted=" + conflictedCrossings
-                        + ", renderedChunks=" + interchangeRenderInvocations,
+                        + ", renderedChunks=" + interchangeRenderInvocations
+                        + ", straightThroughFallbacks=" + straightThroughFallbacks,
                 "families: " + java.util.Arrays.stream(InterchangeType.values())
                         .map(type -> type.name().toLowerCase(java.util.Locale.ROOT)
                                 + '=' + selectedFamilies.getOrDefault(type, 0L))

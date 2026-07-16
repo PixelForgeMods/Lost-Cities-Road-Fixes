@@ -6,9 +6,11 @@ import net.austizz.lostcitiesroadfixes.interchange.InterchangeType;
 import net.austizz.lostcitiesroadfixes.interchange.JunctionForm;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.PlanarPoint;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.RampCenterline;
+import net.austizz.lostcitiesroadfixes.interchange.geometry.RampCenterlineSample;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.RampElevationKeyframe;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.RampPathBuilder;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.RampRoute;
+import net.austizz.lostcitiesroadfixes.interchange.geometry.RoadHeading;
 import net.austizz.lostcitiesroadfixes.planning.elevation.GradeProfilePlanner;
 import net.austizz.lostcitiesroadfixes.road.HalfBlockElevation;
 import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
@@ -16,8 +18,10 @@ import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -26,8 +30,9 @@ public final class InterchangeLayoutFactory {
     private static final int AUXILIARY_TAPER_FORWARD_BLOCKS = 32;
     private static final int TERMINAL_GRADE_LOCK_BLOCKS = 40;
     private static final double AUXILIARY_LATERAL_SHIFT_BLOCKS = 9.0;
-    private static final double RAMP_BRANCH_LATERAL_SHIFT_BLOCKS = 10.0;
+    private static final double RAMP_BRANCH_LATERAL_SHIFT_BLOCKS = 12.0;
     private static final double RAMP_GRADE_SEPARATION_BUFFER_BLOCKS = 4.0;
+    private static final double RASTERIZED_SURFACE_MARGIN_BLOCKS = 1.5;
     private static final double CUSTOM_ROUTE_CLEARANCE_LOCK_BLOCKS = 52.0;
     private static final int CLOVERLEAF_LOOP_TANGENT_BLOCKS = 16;
     private static final int CLOVERLEAF_INNER_GRADE_LOCK_BLOCKS = 4;
@@ -91,12 +96,16 @@ public final class InterchangeLayoutFactory {
                 design,
                 site,
                 createDrafts(design, site, surveyedApproaches, missingApproach));
+        List<InterchangeAuxiliaryLane> auxiliaryLanes = createAuxiliaryLanes(
+                design, site, connections);
+        connections = applyBuiltInStructureLevels(
+                design, site, surveyedApproaches, connections, auxiliaryLanes);
         return new InterchangeLayout(
                 design,
                 site,
                 surveyedApproaches,
                 connections,
-                createAuxiliaryLanes(design, site, connections));
+                auxiliaryLanes);
     }
 
     private List<InterchangeConnection> createBlueprintConnections(
@@ -270,10 +279,11 @@ public final class InterchangeLayoutFactory {
                 InterchangeConnection right = connections.get(rightIndex);
                 double overlap = (left.route().widthBlocks()
                         + right.route().widthBlocks()) / 2.0 - 0.5;
+                RouteSpatialIndex rightRoute = new RouteSpatialIndex(right.route());
                 for (var leftSample : left.route().centerline().samples()) {
-                    RouteProximity nearest = nearestPoint(
-                            right.route(), leftSample.point());
-                    if (nearest.distanceBlocks() >= overlap) {
+                    RouteProximity nearest = rightRoute.nearestWithin(
+                            leftSample.point(), overlap);
+                    if (nearest == null) {
                         continue;
                     }
                     int rightElevation = right.route().centerline()
@@ -949,6 +959,364 @@ public final class InterchangeLayoutFactory {
         return List.copyOf(result);
     }
 
+    private List<InterchangeConnection> applyBuiltInStructureLevels(
+            InterchangeDesign design,
+            InterchangeGeometrySite site,
+            Set<ApproachDirection> approaches,
+            List<InterchangeConnection> connections,
+            List<InterchangeAuxiliaryLane> auxiliaryLanes) {
+        if (design.type() == InterchangeType.STACK) {
+            return connections;
+        }
+
+        List<ConnectionDraft> paths = new ArrayList<>(
+                connections.size() + auxiliaryLanes.size());
+        for (InterchangeConnection connection : connections) {
+            paths.add(new ConnectionDraft(
+                    connection.movement(), connection.route(), connection.form()));
+        }
+        for (InterchangeAuxiliaryLane auxiliaryLane : auxiliaryLanes) {
+            paths.add(new ConnectionDraft(
+                    auxiliaryLane.mainlineMovement(),
+                    auxiliaryLane.route(),
+                    RampForm.MAINLINE));
+        }
+        paths.addAll(arterialConflictDrafts(site, approaches));
+
+        double[] departureLocks = new double[paths.size()];
+        double[] arrivalLocks = new double[paths.size()];
+        java.util.Arrays.fill(departureLocks, TERMINAL_GRADE_LOCK_BLOCKS);
+        java.util.Arrays.fill(arrivalLocks, TERMINAL_GRADE_LOCK_BLOCKS);
+        for (int left = 0; left < paths.size(); left++) {
+            for (int right = left + 1; right < paths.size(); right++) {
+                ConnectionDraft leftPath = paths.get(left);
+                ConnectionDraft rightPath = paths.get(right);
+                if (leftPath.movement().from() == rightPath.movement().from()) {
+                    SharedTerminalRun shared = sharedDepartureRun(
+                            leftPath.route(), rightPath.route());
+                    departureLocks[left] = StrictMath.max(
+                            departureLocks[left], shared.leftBlocks());
+                    departureLocks[right] = StrictMath.max(
+                            departureLocks[right], shared.rightBlocks());
+                }
+                if (leftPath.movement().to() == rightPath.movement().to()) {
+                    SharedTerminalRun shared = sharedArrivalRun(
+                            leftPath.route(), rightPath.route());
+                    arrivalLocks[left] = StrictMath.max(
+                            arrivalLocks[left], shared.leftBlocks());
+                    arrivalLocks[right] = StrictMath.max(
+                            arrivalLocks[right], shared.rightBlocks());
+                }
+            }
+        }
+
+        double[] firstConflict = new double[connections.size()];
+        double[] lastConflict = new double[connections.size()];
+        boolean[] hasConflict = new boolean[connections.size()];
+        String[] firstConflictSource = new String[connections.size()];
+        java.util.Arrays.fill(firstConflict, Double.POSITIVE_INFINITY);
+        java.util.Arrays.fill(lastConflict, Double.NEGATIVE_INFINITY);
+        for (int left = 0; left < paths.size(); left++) {
+            for (int right = left + 1; right < paths.size(); right++) {
+                if (!isTurningConnection(left, connections)
+                        && !isTurningConnection(right, connections)) {
+                    continue;
+                }
+                ConnectionDraft leftPath = paths.get(left);
+                ConnectionDraft rightPath = paths.get(right);
+                double leftSharedDeparture = departureLocks[left];
+                double rightSharedDeparture = departureLocks[right];
+                double leftSharedArrival = arrivalLocks[left];
+                double rightSharedArrival = arrivalLocks[right];
+                if (leftPath.movement().from() == rightPath.movement().from()) {
+                    SharedTerminalRun shared = sharedDepartureRun(
+                            leftPath.route(), rightPath.route());
+                    leftSharedDeparture = StrictMath.max(
+                            leftSharedDeparture, shared.leftBlocks());
+                    rightSharedDeparture = StrictMath.max(
+                            rightSharedDeparture, shared.rightBlocks());
+                }
+                if (leftPath.movement().to() == rightPath.movement().to()) {
+                    SharedTerminalRun shared = sharedArrivalRun(
+                            leftPath.route(), rightPath.route());
+                    leftSharedArrival = StrictMath.max(
+                            leftSharedArrival, shared.leftBlocks());
+                    rightSharedArrival = StrictMath.max(
+                            rightSharedArrival, shared.rightBlocks());
+                }
+                ProfileConflictWindow window = profileConflictWindow(
+                        leftPath,
+                        rightPath,
+                        departureLocks[left],
+                        departureLocks[right],
+                        arrivalLocks[left],
+                        arrivalLocks[right],
+                        leftSharedDeparture,
+                        rightSharedDeparture,
+                        leftSharedArrival,
+                        rightSharedArrival);
+                if (isTurningConnection(left, connections)
+                        && window.leftConflict()) {
+                    hasConflict[left] = true;
+                    if (window.leftStart() < firstConflict[left]) {
+                        firstConflictSource[left] = paths.get(right).movement().toString();
+                    }
+                    firstConflict[left] = StrictMath.min(
+                            firstConflict[left], window.leftStart());
+                    lastConflict[left] = StrictMath.max(
+                            lastConflict[left], window.leftEnd());
+                }
+                if (isTurningConnection(right, connections)
+                        && window.rightConflict()) {
+                    hasConflict[right] = true;
+                    if (window.rightStart() < firstConflict[right]) {
+                        firstConflictSource[right] = paths.get(left).movement().toString();
+                    }
+                    firstConflict[right] = StrictMath.min(
+                            firstConflict[right], window.rightStart());
+                    lastConflict[right] = StrictMath.max(
+                            lastConflict[right], window.rightEnd());
+                }
+            }
+        }
+
+        List<InterchangeConnection> profiled = new ArrayList<>(connections.size());
+        for (int index = 0; index < connections.size(); index++) {
+            InterchangeConnection connection = connections.get(index);
+            RampRoute route = connection.route();
+            int structureLevel = connection.structureLevel();
+            if (connection.form() != RampForm.MAINLINE) {
+                if (design.type() == InterchangeType.SPUI) {
+                    route = signalizedCoreRoute(design, site, connection);
+                    structureLevel = 1;
+                    profiled.add(new InterchangeConnection(
+                            connection.movement(),
+                            route,
+                            connection.form(),
+                            connection.control(),
+                            structureLevel));
+                    continue;
+                }
+                IllegalArgumentException rejection = null;
+                for (int candidateLevel : preferredStructureLevels(
+                        design, site, connection)) {
+                    try {
+                        route = builtInStructureLevelRoute(
+                                design,
+                                site,
+                                connection.movement(),
+                                connection.route(),
+                                candidateLevel,
+                                departureLocks[index],
+                                arrivalLocks[index],
+                                hasConflict[index],
+                                firstConflictSource[index],
+                                firstConflict[index],
+                                lastConflict[index]);
+                        structureLevel = candidateLevel;
+                        rejection = null;
+                        break;
+                    } catch (IllegalArgumentException candidateRejection) {
+                        if (rejection == null) {
+                            rejection = candidateRejection;
+                        } else {
+                            rejection.addSuppressed(candidateRejection);
+                        }
+                    }
+                }
+                if (rejection != null) {
+                    route = connection.route();
+                    structureLevel = connection.structureLevel();
+                }
+            }
+            profiled.add(new InterchangeConnection(
+                    connection.movement(),
+                    route,
+                    connection.form(),
+                    connection.control(),
+                    structureLevel));
+        }
+        return List.copyOf(profiled);
+    }
+
+    private RampRoute signalizedCoreRoute(
+            InterchangeDesign design,
+            InterchangeGeometrySite site,
+            InterchangeConnection connection) {
+        RampRoute route = connection.route();
+        RampCenterline centerline = route.centerline();
+        HalfBlockElevation start = centerline.startElevation();
+        HalfBlockElevation end = centerline.endElevation();
+        HalfBlockElevation core = lowerCenterElevation(site);
+        int departureRun = gradePlanner.minimumRunBlocks(start, core);
+        int arrivalRun = gradePlanner.minimumRunBlocks(core, end);
+        double departureStart = TERMINAL_GRADE_LOCK_BLOCKS;
+        double departureEnd = departureStart + departureRun;
+        double arrivalEnd = centerline.lengthBlocks() - TERMINAL_GRADE_LOCK_BLOCKS;
+        double arrivalStart = arrivalEnd - arrivalRun;
+        if (departureEnd > arrivalStart + 1.0e-9) {
+            throw new IllegalArgumentException(
+                    design.id() + " movement " + connection.movement()
+                            + " has no room for a level signalized core");
+        }
+        List<RampElevationKeyframe> profile = new ArrayList<>();
+        appendKeyframe(profile, 0.0, start);
+        appendKeyframe(profile, departureStart, start);
+        appendKeyframe(profile, departureEnd, core);
+        appendKeyframe(profile, arrivalStart, core);
+        appendKeyframe(profile, arrivalEnd, end);
+        appendKeyframe(profile, centerline.lengthBlocks(), end);
+        return new RampRoute(
+                centerline.withElevationProfile(profile),
+                route.widthBlocks());
+    }
+
+    private List<ConnectionDraft> arterialConflictDrafts(
+            InterchangeGeometrySite site,
+            Set<ApproachDirection> approaches) {
+        List<ConnectionDraft> result = new ArrayList<>(approaches.size() * 2);
+        for (ApproachDirection direction : approaches) {
+            double run = site.approachRunBlocks();
+            RoadHeading heading = switch (direction) {
+                case NORTH -> RoadHeading.SOUTH;
+                case EAST -> RoadHeading.WEST;
+                case SOUTH -> RoadHeading.NORTH;
+                case WEST -> RoadHeading.EAST;
+            };
+            HalfBlockElevation nativeElevation = switch (direction) {
+                case EAST, WEST -> site.xRoadNativeElevation();
+                case NORTH, SOUTH -> site.zRoadNativeElevation();
+            };
+            for (double crossOffset : List.of(-8.0, 8.0)) {
+                PlanarPoint startPoint = switch (direction) {
+                    case NORTH -> new PlanarPoint(
+                            site.center().x() + crossOffset,
+                            site.center().z() - run);
+                    case EAST -> new PlanarPoint(
+                            site.center().x() + run,
+                            site.center().z() + crossOffset);
+                    case SOUTH -> new PlanarPoint(
+                            site.center().x() + crossOffset,
+                            site.center().z() + run);
+                    case WEST -> new PlanarPoint(
+                            site.center().x() - run,
+                            site.center().z() + crossOffset);
+                };
+                RampCenterline centerline = new RampPathBuilder(
+                        standard, startPoint, heading)
+                        .straight(run * 2.0)
+                        .build(List.of(
+                                new RampElevationKeyframe(0.0, nativeElevation),
+                                new RampElevationKeyframe(
+                                        run, site.centerElevation(direction)),
+                                new RampElevationKeyframe(run * 2.0, nativeElevation)));
+                result.add(new ConnectionDraft(
+                        new InterchangeMovement(
+                                direction,
+                                direction.opposite(),
+                                MovementKind.STRAIGHT),
+                        new RampRoute(centerline, 16),
+                        RampForm.MAINLINE));
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private List<Integer> preferredStructureLevels(
+            InterchangeDesign design,
+            InterchangeGeometrySite site,
+            InterchangeConnection connection) {
+        List<Integer> levels = new ArrayList<>(design.structureLevels());
+        for (int level = 1; level <= design.structureLevels(); level++) {
+            levels.add(level);
+        }
+        HalfBlockElevation start = connection.route().centerline().startElevation();
+        HalfBlockElevation end = connection.route().centerline().endElevation();
+        levels.sort(Comparator
+                .comparingInt((Integer level) -> {
+                    HalfBlockElevation tier = structureLevelElevation(
+                            site, design.structureLevels(), level);
+                    return gradePlanner.minimumRunBlocks(start, tier)
+                            + gradePlanner.minimumRunBlocks(tier, end);
+                })
+                .thenComparingInt(level -> StrictMath.abs(
+                        level - connection.structureLevel()))
+                .thenComparingInt(Integer::intValue));
+        return List.copyOf(levels);
+    }
+
+    private static boolean isTurningConnection(
+            int index,
+            List<InterchangeConnection> connections) {
+        return index < connections.size()
+                && connections.get(index).form() != RampForm.MAINLINE;
+    }
+
+    private RampRoute builtInStructureLevelRoute(
+            InterchangeDesign design,
+            InterchangeGeometrySite site,
+            InterchangeMovement movement,
+            RampRoute route,
+            int structureLevel,
+            double departureLock,
+            double arrivalLock,
+            boolean hasConflict,
+            String firstConflictSource,
+            double firstConflict,
+            double lastConflict) {
+        RampCenterline centerline = route.centerline();
+        HalfBlockElevation start = centerline.startElevation();
+        HalfBlockElevation end = centerline.endElevation();
+        HalfBlockElevation tier = structureLevelElevation(
+                site, design.structureLevels(), structureLevel);
+        int departureGradeRun = gradePlanner.minimumRunBlocks(start, tier);
+        int arrivalGradeRun = gradePlanner.minimumRunBlocks(tier, end);
+        double departureGradeStart = hasConflict && departureGradeRun != 0
+                ? firstConflict - departureGradeRun : departureLock;
+        double departureGradeEnd = departureGradeStart + departureGradeRun;
+        double arrivalGradeEnd = hasConflict && arrivalGradeRun != 0
+                ? lastConflict + arrivalGradeRun
+                : centerline.lengthBlocks() - arrivalLock;
+        double arrivalGradeStart = arrivalGradeEnd - arrivalGradeRun;
+        boolean departureFits = departureGradeStart >= departureLock - 1.0e-9;
+        boolean arrivalFits = arrivalGradeEnd <= centerline.lengthBlocks()
+                - arrivalLock + 1.0e-9;
+        boolean conflictCovered = !hasConflict
+                || ((departureGradeRun == 0
+                || departureGradeEnd <= firstConflict + 1.0e-9)
+                && (arrivalGradeRun == 0
+                || arrivalGradeStart >= lastConflict - 1.0e-9));
+        if (!departureFits
+                || !arrivalFits
+                || !conflictCovered
+                || departureGradeEnd > arrivalGradeStart + 1.0e-9) {
+            throw new IllegalArgumentException(
+                    design.id() + " movement " + movement
+                            + " cannot safely reach built-in structure level "
+                            + structureLevel + " outside surface-conflict window "
+                            + String.format(
+                                    java.util.Locale.ROOT,
+                                    "%.3f..%.3f (terminal locks %.3f/%.3f)",
+                                    hasConflict ? firstConflict : departureGradeEnd,
+                                    hasConflict ? lastConflict : arrivalGradeStart,
+                                    departureLock,
+                                    arrivalLock)
+                            + (firstConflictSource == null
+                                    ? "" : " first overlaps " + firstConflictSource));
+        }
+
+        List<RampElevationKeyframe> profile = new ArrayList<>();
+        appendKeyframe(profile, 0.0, start);
+        appendKeyframe(profile, departureGradeStart, start);
+        appendKeyframe(profile, departureGradeEnd, tier);
+        appendKeyframe(profile, arrivalGradeStart, tier);
+        appendKeyframe(profile, arrivalGradeEnd, end);
+        appendKeyframe(profile, centerline.lengthBlocks(), end);
+        return new RampRoute(
+                centerline.withElevationProfile(profile),
+                route.widthBlocks());
+    }
+
     private void requirePhysicalStackLevels(
             InterchangeDesign design,
             InterchangeGeometrySite site) {
@@ -1500,9 +1868,10 @@ public final class InterchangeLayoutFactory {
         double overlap = (left.widthBlocks() + right.widthBlocks()) / 2.0;
         double leftBlocks = 0.0;
         double rightBlocks = 0.0;
+        RouteSpatialIndex rightRoute = new RouteSpatialIndex(right);
         for (var sample : left.centerline().samples()) {
-            RouteProximity nearest = nearestPoint(right, sample.point());
-            if (nearest.distanceBlocks() >= overlap) {
+            RouteProximity nearest = rightRoute.nearestWithin(sample.point(), overlap);
+            if (nearest == null) {
                 break;
             }
             leftBlocks = sample.stationBlocks();
@@ -1519,10 +1888,11 @@ public final class InterchangeLayoutFactory {
         double rightBlocks = 0.0;
         List<net.austizz.lostcitiesroadfixes.interchange.geometry.RampCenterlineSample>
                 samples = left.centerline().samples();
+        RouteSpatialIndex rightRoute = new RouteSpatialIndex(right);
         for (int index = samples.size() - 1; index >= 0; index--) {
             var sample = samples.get(index);
-            RouteProximity nearest = nearestPoint(right, sample.point());
-            if (nearest.distanceBlocks() >= overlap) {
+            RouteProximity nearest = rightRoute.nearestWithin(sample.point(), overlap);
+            if (nearest == null) {
                 break;
             }
             leftBlocks = left.centerline().lengthBlocks() - sample.stationBlocks();
@@ -1546,10 +1916,11 @@ public final class InterchangeLayoutFactory {
         double rightEnd = Double.NEGATIVE_INFINITY;
         List<net.austizz.lostcitiesroadfixes.interchange.geometry.RampCenterlineSample>
                 samples = left.route().centerline().samples();
+        RouteSpatialIndex rightRoute = new RouteSpatialIndex(right.route());
         for (int index = 0; index < samples.size(); index++) {
             var sample = samples.get(index);
-            RouteProximity nearest = nearestPoint(right.route(), sample.point());
-            if (nearest.distanceBlocks() >= overlap) {
+            RouteProximity nearest = rightRoute.nearestWithin(sample.point(), overlap);
+            if (nearest == null) {
                 continue;
             }
             boolean sharedDeparture = left.movement().from() == right.movement().from()
@@ -1575,39 +1946,67 @@ public final class InterchangeLayoutFactory {
                 rightEnd);
     }
 
-    private static RouteProximity nearestPoint(
-            RampRoute route,
-            PlanarPoint point) {
-        RouteProximity result = null;
+    private static ProfileConflictWindow profileConflictWindow(
+            ConnectionDraft left,
+            ConnectionDraft right,
+            double leftDepartureLock,
+            double rightDepartureLock,
+            double leftArrivalLock,
+            double rightArrivalLock,
+            double leftSharedDeparture,
+            double rightSharedDeparture,
+            double leftSharedArrival,
+            double rightSharedArrival) {
+        // Rasterization tests block centres rather than mathematical strip
+        // intersections. Reserve a diagonal-cell margin so a grade is fully
+        // complete before two paved footprints can share a block column.
+        double overlap = (left.route().widthBlocks() + right.route().widthBlocks()) / 2.0
+                + RASTERIZED_SURFACE_MARGIN_BLOCKS;
+        double leftStart = Double.POSITIVE_INFINITY;
+        double leftEnd = Double.NEGATIVE_INFINITY;
+        double rightStart = Double.POSITIVE_INFINITY;
+        double rightEnd = Double.NEGATIVE_INFINITY;
+        double leftMutableEnd = left.route().centerline().lengthBlocks()
+                - leftArrivalLock;
+        double rightMutableEnd = right.route().centerline().lengthBlocks()
+                - rightArrivalLock;
         List<net.austizz.lostcitiesroadfixes.interchange.geometry.RampCenterlineSample>
-                samples = route.centerline().samples();
-        for (int index = 0; index < samples.size() - 1; index++) {
-            var start = samples.get(index);
-            var end = samples.get(index + 1);
-            double segmentX = end.point().x() - start.point().x();
-            double segmentZ = end.point().z() - start.point().z();
-            double lengthSquared = segmentX * segmentX + segmentZ * segmentZ;
-            if (lengthSquared == 0.0) {
+                samples = left.route().centerline().samples();
+        RouteSpatialIndex rightRoute = new RouteSpatialIndex(right.route());
+        for (var sample : samples) {
+            RouteProximity nearest = rightRoute.nearestWithin(sample.point(), overlap);
+            if (nearest == null) {
                 continue;
             }
-            double fraction = ((point.x() - start.point().x()) * segmentX
-                    + (point.z() - start.point().z()) * segmentZ) / lengthSquared;
-            fraction = StrictMath.max(0.0, StrictMath.min(1.0, fraction));
-            double projectedX = start.point().x() + segmentX * fraction;
-            double projectedZ = start.point().z() + segmentZ * fraction;
-            double distance = StrictMath.hypot(
-                    projectedX - point.x(), projectedZ - point.z());
-            if (result == null || distance < result.distanceBlocks()) {
-                result = new RouteProximity(
-                        start.stationBlocks()
-                                + (end.stationBlocks() - start.stationBlocks()) * fraction,
-                        distance);
+            boolean sharedDeparture = left.movement().from() == right.movement().from()
+                    && sample.stationBlocks() <= leftSharedDeparture + 1.0e-9
+                    && nearest.stationBlocks() <= rightSharedDeparture + 1.0e-9;
+            boolean sharedArrival = left.movement().to() == right.movement().to()
+                    && left.route().centerline().lengthBlocks()
+                            - sample.stationBlocks() <= leftSharedArrival + 1.0e-9
+                    && right.route().centerline().lengthBlocks()
+                            - nearest.stationBlocks() <= rightSharedArrival + 1.0e-9;
+            if (sharedDeparture || sharedArrival) {
+                continue;
+            }
+            if (sample.stationBlocks() > leftDepartureLock + 1.0e-9
+                    && sample.stationBlocks() < leftMutableEnd - 1.0e-9) {
+                leftStart = StrictMath.min(leftStart, sample.stationBlocks());
+                leftEnd = StrictMath.max(leftEnd, sample.stationBlocks());
+            }
+            if (nearest.stationBlocks() > rightDepartureLock + 1.0e-9
+                    && nearest.stationBlocks() < rightMutableEnd - 1.0e-9) {
+                rightStart = StrictMath.min(rightStart, nearest.stationBlocks());
+                rightEnd = StrictMath.max(rightEnd, nearest.stationBlocks());
             }
         }
-        if (result == null) {
-            throw new IllegalStateException("A stack route has no samples");
-        }
-        return result;
+        return new ProfileConflictWindow(
+                Double.isFinite(leftStart),
+                leftStart,
+                leftEnd,
+                Double.isFinite(rightStart),
+                rightStart,
+                rightEnd);
     }
 
     private static void appendKeyframe(
@@ -1762,10 +2161,104 @@ public final class InterchangeLayoutFactory {
             double rightEnd) {
     }
 
+    private record ProfileConflictWindow(
+            boolean leftConflict,
+            double leftStart,
+            double leftEnd,
+            boolean rightConflict,
+            double rightStart,
+            double rightEnd) {
+    }
+
     private record SharedTerminalRun(double leftBlocks, double rightBlocks) {
     }
 
     private record RouteProximity(double stationBlocks, double distanceBlocks) {
+    }
+
+    private static final class RouteSpatialIndex {
+        private static final double CELL_BLOCKS = 16.0;
+
+        private final List<RampCenterlineSample> samples;
+        private final Map<Long, List<Integer>> segmentsByCell = new HashMap<>();
+
+        private RouteSpatialIndex(RampRoute route) {
+            samples = route.centerline().samples();
+            for (int index = 0; index < samples.size() - 1; index++) {
+                PlanarPoint start = samples.get(index).point();
+                PlanarPoint end = samples.get(index + 1).point();
+                int minimumCellX = cell(StrictMath.min(start.x(), end.x()));
+                int maximumCellX = cell(StrictMath.max(start.x(), end.x()));
+                int minimumCellZ = cell(StrictMath.min(start.z(), end.z()));
+                int maximumCellZ = cell(StrictMath.max(start.z(), end.z()));
+                for (int cellZ = minimumCellZ; cellZ <= maximumCellZ; cellZ++) {
+                    for (int cellX = minimumCellX; cellX <= maximumCellX; cellX++) {
+                        segmentsByCell.computeIfAbsent(
+                                key(cellX, cellZ), ignored -> new ArrayList<>())
+                                .add(index);
+                    }
+                }
+            }
+        }
+
+        private RouteProximity nearestWithin(
+                PlanarPoint point,
+                double maximumDistanceBlocks) {
+            int minimumCellX = cell(point.x() - maximumDistanceBlocks);
+            int maximumCellX = cell(point.x() + maximumDistanceBlocks);
+            int minimumCellZ = cell(point.z() - maximumDistanceBlocks);
+            int maximumCellZ = cell(point.z() + maximumDistanceBlocks);
+            RouteProximity nearest = null;
+            for (int cellZ = minimumCellZ; cellZ <= maximumCellZ; cellZ++) {
+                for (int cellX = minimumCellX; cellX <= maximumCellX; cellX++) {
+                    List<Integer> segments = segmentsByCell.get(key(cellX, cellZ));
+                    if (segments == null) {
+                        continue;
+                    }
+                    for (int segment : segments) {
+                        RouteProximity candidate = proximity(segment, point);
+                        if (candidate.distanceBlocks() >= maximumDistanceBlocks) {
+                            continue;
+                        }
+                        if (nearest == null
+                                || candidate.distanceBlocks() < nearest.distanceBlocks()
+                                || (candidate.distanceBlocks() == nearest.distanceBlocks()
+                                && candidate.stationBlocks() < nearest.stationBlocks())) {
+                            nearest = candidate;
+                        }
+                    }
+                }
+            }
+            return nearest;
+        }
+
+        private RouteProximity proximity(int segment, PlanarPoint point) {
+            RampCenterlineSample start = samples.get(segment);
+            RampCenterlineSample end = samples.get(segment + 1);
+            double segmentX = end.point().x() - start.point().x();
+            double segmentZ = end.point().z() - start.point().z();
+            double lengthSquared = segmentX * segmentX + segmentZ * segmentZ;
+            double fraction = lengthSquared == 0.0
+                    ? 0.0
+                    : ((point.x() - start.point().x()) * segmentX
+                    + (point.z() - start.point().z()) * segmentZ) / lengthSquared;
+            fraction = StrictMath.max(0.0, StrictMath.min(1.0, fraction));
+            double projectedX = start.point().x() + segmentX * fraction;
+            double projectedZ = start.point().z() + segmentZ * fraction;
+            return new RouteProximity(
+                    start.stationBlocks()
+                            + (end.stationBlocks() - start.stationBlocks()) * fraction,
+                    StrictMath.hypot(
+                            projectedX - point.x(), projectedZ - point.z()));
+        }
+
+        private static int cell(double coordinate) {
+            return (int) StrictMath.floor(coordinate / CELL_BLOCKS);
+        }
+
+        private static long key(int cellX, int cellZ) {
+            return ((long) cellX << 32) ^ (cellZ & 0xffff_ffffL);
+        }
     }
 
     private record TangentLengths(

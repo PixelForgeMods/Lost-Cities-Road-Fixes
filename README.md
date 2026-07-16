@@ -16,7 +16,7 @@ The mod is intentionally pinned to one Lost Cities build because its compatibili
 Back up the world, place the universal JAR in the server and client `mods`
 folders, and install it before exploring or pregenerating affected terrain.
 Road Fixes only changes newly generated chunks. See the
-[1.2.0 release notes](docs/release/1.2.0.md) and [changelog](CHANGELOG.md).
+[1.2.1 release notes](docs/release/1.2.1.md) and [changelog](CHANGELOG.md).
 
 ## Generation behavior
 

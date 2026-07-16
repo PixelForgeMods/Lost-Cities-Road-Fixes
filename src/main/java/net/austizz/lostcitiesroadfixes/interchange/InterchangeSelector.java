@@ -4,6 +4,7 @@ import net.austizz.lostcitiesroadfixes.planning.elevation.GradeProfilePlanner;
 import net.austizz.lostcitiesroadfixes.interchange.geometry.PlanarPoint;
 import net.austizz.lostcitiesroadfixes.interchange.layout.InterchangeGeometrySite;
 import net.austizz.lostcitiesroadfixes.interchange.layout.InterchangeLayoutFactory;
+import net.austizz.lostcitiesroadfixes.road.HalfBlockElevation;
 import net.austizz.lostcitiesroadfixes.road.RoadDesignStandard;
 
 import java.util.ArrayList;
@@ -13,12 +14,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public final class InterchangeSelector {
     private final List<InterchangeDesign> designs;
     private final GradeProfilePlanner gradePlanner;
     private final InterchangeLayoutFactory layoutFactory;
     private final RoadDesignStandard standard;
+    private final ConcurrentMap<CompilationKey, CandidateCompilation> compilationCache =
+            new ConcurrentHashMap<>();
 
     public InterchangeSelector(List<InterchangeDesign> designs, RoadDesignStandard standard) {
         Objects.requireNonNull(designs, "designs");
@@ -146,6 +151,20 @@ public final class InterchangeSelector {
     }
 
     private CandidateCompilation compile(InterchangeDesign design, InterchangeSite site) {
+        CompilationKey key = new CompilationKey(
+                design,
+                site.approachRunBlocks(),
+                site.xRoadNativeElevation(),
+                site.zRoadNativeElevation(),
+                site.xRoadCenterElevation(),
+                site.zRoadCenterElevation());
+        return compilationCache.computeIfAbsent(
+                key, ignored -> compileUncached(design, site));
+    }
+
+    private CandidateCompilation compileUncached(
+            InterchangeDesign design,
+            InterchangeSite site) {
         int firstApproach = roundUpToChunk(design.minimumApproachRunBlocks());
         String lastFailure = "no chunk-aligned approach length is available";
         for (int approach = firstApproach;
@@ -205,6 +224,15 @@ public final class InterchangeSelector {
         private boolean feasible() {
             return failure == null;
         }
+    }
+
+    private record CompilationKey(
+            InterchangeDesign design,
+            int maximumApproachRunBlocks,
+            HalfBlockElevation xRoadNativeElevation,
+            HalfBlockElevation zRoadNativeElevation,
+            HalfBlockElevation xRoadCenterElevation,
+            HalfBlockElevation zRoadCenterElevation) {
     }
 
 }

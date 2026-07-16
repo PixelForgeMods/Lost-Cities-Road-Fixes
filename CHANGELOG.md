@@ -2,6 +2,39 @@
 
 All notable changes to Lost Cities: Road Fixes are documented here.
 
+## 1.2.1+mc1.21.1 — 2026-07-16
+
+### Chunk-generation safety
+
+- Prevents an unsafe interchange overlay from escaping through Lost Cities'
+  building-suppression or late-render hooks and aborting the affected chunk.
+- Falls back atomically to both graded through highways when a ramp layout
+  cannot satisfy the final clearance gate; no partial interchange is written.
+- Exposes the straight-through fallback count in
+  `/lostcitiesroadfixes status` and logs the first rejected overlay with its
+  chunk and cause.
+
+### Ramp composition
+
+- Resolves close overlapping ramp pavement around the nearest physical route
+  instead of emitting two decks inside the seven-block vehicle envelope.
+- Prevents an intermediate ramp elevation from transitively deleting a lower
+  or upper deck that has valid clearance from the selected surface.
+- Adds two blocks of branch separation, models complete one-sided arterial
+  footprints during grade planning, and gives SPUIs one level signalized core.
+- Profiles feasible built-in ramp conflicts onto physical structure tiers while
+  retaining authored fallback geometry when a compact family intentionally
+  shares a graded surface.
+
+### Performance and validation
+
+- Replaces quadratic route-proximity scans with a bounded spatial segment
+  index and caches thread-safe candidate compilation by design and deck facts.
+- Reproduces the compact-diamond crash, sweeps every built-in over its complete
+  compiled chunk envelope, and verifies custom interchange compatibility.
+- Records the investigation and evidence in the
+  [highway chunk-generation regression](docs/regressions/2026-07-highway-chunk-generation-fallback.md).
+
 ## 1.2.0+mc1.21.1 — 2026-07-15
 
 ### Calculated selection and corridor coordination

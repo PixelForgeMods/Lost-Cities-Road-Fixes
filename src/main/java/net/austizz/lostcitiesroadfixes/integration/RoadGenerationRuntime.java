@@ -28,6 +28,7 @@ import net.austizz.lostcitiesroadfixes.planning.RoadPlanKey;
 import net.austizz.lostcitiesroadfixes.planning.continuity.ContinuityPlanner;
 import net.austizz.lostcitiesroadfixes.planning.continuity.RegionalRoadPlan;
 import net.austizz.lostcitiesroadfixes.planning.continuity.RoadAxis;
+import net.austizz.lostcitiesroadfixes.render.ChunkRoadSurface;
 import net.austizz.lostcitiesroadfixes.render.ElevatedRoadTile;
 import net.austizz.lostcitiesroadfixes.render.MinecraftRoadWriter;
 import net.austizz.lostcitiesroadfixes.render.RoadSupportPolicy;
@@ -68,6 +69,7 @@ public final class RoadGenerationRuntime {
     private static final AtomicLong REJECTED_CROSSINGS_PLANNED = new AtomicLong();
     private static final AtomicLong CONFLICTED_CROSSINGS_PLANNED = new AtomicLong();
     private static final AtomicLong INTERCHANGE_RENDER_INVOCATIONS = new AtomicLong();
+    private static final AtomicLong STRAIGHT_THROUGH_FALLBACKS = new AtomicLong();
 
     private RoadGenerationRuntime() {
     }
@@ -118,6 +120,10 @@ public final class RoadGenerationRuntime {
         return INTERCHANGE_RENDER_INVOCATIONS.get();
     }
 
+    public static long straightThroughFallbackCount() {
+        return STRAIGHT_THROUGH_FALLBACKS.get();
+    }
+
     public static int roadPlanCacheSize() {
         return PLAN_CACHES.roadSize();
     }
@@ -140,6 +146,7 @@ public final class RoadGenerationRuntime {
                 rejectedCrossingPlanCount(),
                 conflictedCrossingPlanCount(),
                 interchangeRenderInvocationCount(),
+                straightThroughFallbackCount(),
                 roadPlanCacheSize(),
                 interchangePlanCacheSize(),
                 InterchangeDesignResources.repository().snapshot().size(),
@@ -179,11 +186,11 @@ public final class RoadGenerationRuntime {
             RoadSupportPolicy supportPolicy = feature.profile.HIGHWAY_SUPPORTS
                     ? RoadSupportPolicy.enabled(theme.maximumSupportDepthBlocks())
                     : RoadSupportPolicy.disabled();
-            RENDER_PIPELINE.render(
+            ChunkRoadSurface surface = composeRoadSurface(
                     target,
                     roads,
-                    interchanges,
-                    surface -> writer.write(chunk, surface, supportPolicy));
+                    interchanges);
+            writer.write(chunk, surface, supportPolicy);
         } catch (RuntimeException exception) {
             throw new IllegalStateException(
                     "Failed to render replacement roads in dimension "
@@ -248,7 +255,29 @@ public final class RoadGenerationRuntime {
         List<ElevatedRoadTile> roads = nearbyRoads(provider, profile, target, settings);
         List<PlannedInterchangeGeometry> interchanges = nearbyInterchanges(
                 provider, profile, target, settings);
-        return !RENDER_PIPELINE.compose(target, roads, interchanges).cells().isEmpty();
+        return !composeRoadSurface(target, roads, interchanges).cells().isEmpty();
+    }
+
+    private static ChunkRoadSurface composeRoadSurface(
+            ChunkPoint target,
+            List<ElevatedRoadTile> roads,
+            List<PlannedInterchangeGeometry> interchanges) {
+        try {
+            return RENDER_PIPELINE.compose(target, roads, interchanges);
+        } catch (IllegalArgumentException unsafeInterchange) {
+            if (interchanges.isEmpty()) {
+                throw unsafeInterchange;
+            }
+            if (STRAIGHT_THROUGH_FALLBACKS.incrementAndGet() == 1) {
+                LostCitiesRoadFixes.LOGGER.error(
+                        "Unsafe interchange overlay at chunk {}; preserving graded "
+                                + "straight-through highways instead",
+                        target,
+                        unsafeInterchange);
+            }
+            return RENDER_PIPELINE.composeStraightThrough(
+                    target, roads, interchanges);
+        }
     }
 
     private static List<ElevatedRoadTile> nearbyRoads(
